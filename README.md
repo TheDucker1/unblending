@@ -52,9 +52,17 @@ cmake -S . -B build-cuda -DUNBLENDING_ENABLE_CUDA=ON
 cmake --build build-cuda --parallel
 ```
 
-This option requires CMake 3.18 or newer, Python 3 for kernel source generation,
-and the NVIDIA CUDA toolkit. Set `CMAKE_CUDA_ARCHITECTURES` when targeting a
-specific GPU architecture. A default build has no CUDA dependency.
+This option requires CMake 3.18 or newer and the NVIDIA CUDA toolkit. Set
+`CMAKE_CUDA_ARCHITECTURES` when targeting a specific GPU architecture. The CUDA
+build uses the checked-in FP32 blend header. A default build has no CUDA
+dependency.
+
+If you edit the scalar blend formulas in `experiments/first-pass-gpu/blend.hpp`,
+regenerate the checked-in header with:
+
+```sh
+python3 experiments/first-pass-gpu/generate_fp32.py unblending/src/cuda blend.hpp
+```
 
 Set `UNBLENDING_BACKEND` before running the application:
 
