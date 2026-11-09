@@ -20,5 +20,25 @@ target_include_directories(
 	$<INSTALL_INTERFACE:include>
 )
 
+if(UNBLENDING_ENABLE_CUDA)
+	find_package(Python3 REQUIRED COMPONENTS Interpreter)
+	set(cuda_solver "${PROJECT_SOURCE_DIR}/experiments/first-pass-gpu")
+	set(cuda_generated "${CMAKE_CURRENT_BINARY_DIR}/cuda-generated")
+	add_custom_command(
+		OUTPUT "${cuda_generated}/float_blend.hpp"
+		COMMAND "${Python3_EXECUTABLE}" "${cuda_solver}/generate_fp32.py" "${cuda_generated}" blend.hpp
+		DEPENDS "${cuda_solver}/generate_fp32.py" "${cuda_solver}/blend.hpp"
+		VERBATIM
+	)
+	target_sources(unblending PRIVATE src/gpu_backend.cu "${cuda_generated}/float_blend.hpp")
+	target_include_directories(unblending PRIVATE "${cuda_solver}/general" "${cuda_generated}")
+	target_compile_definitions(unblending PRIVATE UNBLENDING_HAS_CUDA)
+	set_target_properties(unblending PROPERTIES CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON)
+	target_compile_options(unblending PRIVATE
+		$<$<COMPILE_LANGUAGE:CUDA>:--fmad=false>
+		$<$<COMPILE_LANGUAGE:CUDA>:-Xcompiler=-ffp-contract=off>
+	)
+endif()
+
 install(FILES ${headers} DESTINATION include/unblending)
 install(TARGETS unblending ARCHIVE DESTINATION lib)

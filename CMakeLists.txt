@@ -18,6 +18,16 @@ endif()
 
 option(UNBLENDING_BUILD_CLI_APP "Build CLI app" ON )
 option(UNBLENDING_BUILD_GUI_APP "Build GUI app" OFF)
+option(UNBLENDING_ENABLE_CUDA "Enable the CUDA dispatcher for public solver calls" OFF)
+
+if(UNBLENDING_ENABLE_CUDA)
+	if(CMAKE_VERSION VERSION_LESS 3.18)
+		message(FATAL_ERROR "UNBLENDING_ENABLE_CUDA requires CMake 3.18 or later")
+	endif()
+	cmake_policy(SET CMP0104 NEW)
+	enable_language(CUDA)
+endif()
+
 
 ######################################################################
 # Add sub-directories for external libraries

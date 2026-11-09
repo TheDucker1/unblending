@@ -1,4 +1,5 @@
 #include <unblending/unblending.hpp>
+#include "gpu_dispatch.hpp"
 #include <unblending/image_processing.hpp>
 #include <unblending/color_model.hpp>
 #include <unblending/equations.hpp>
@@ -20,6 +21,27 @@
 namespace unblending
 {
     using std::vector;
+
+    namespace
+    {
+        gpu::Options gpu_options(bool opaque, bool smooth = false)
+        {
+            gpu::Options options;
+            options.opaque = opaque;
+            options.smooth = smooth;
+#ifdef SPARCITY
+            options.sparsity = true;
+#endif
+#ifdef SECOND_LAYER_GRAY
+            options.gray_layer = 1;
+#endif
+#if defined(AKSOY_INITIAL_SOLUTION) || defined(USE_ORIGINAL_HYPERPARAMETERS)
+            options.supported_build = false;
+#endif
+            return options;
+        }
+    }
+
     
     struct OptimizationParameterSet
     {
@@ -315,6 +337,11 @@ namespace unblending
                                                 const int                 target_concurrency)
     {
         timer::Timer timer("perform_matte_refinement");
+
+        vector<ColorImage> gpu_layers;
+        if (gpu::try_solve(image, layer_infos, &layers,
+                           gpu_options(has_opaque_background, force_smooth_background), gpu_layers))
+            return gpu_layers;
         
         const vector<ColorModelPtr> models                  = extract_color_models           (layer_infos);
         const vector<CompOp>        comp_ops                = extract_comp_ops               (layer_infos);
@@ -421,6 +448,10 @@ namespace unblending
                                               const int                target_concurrency)
     {
         timer::Timer timer("compute_color_unmixing");
+
+        vector<ColorImage> gpu_layers;
+        if (gpu::try_solve(image, layer_infos, nullptr, gpu_options(has_opaque_background), gpu_layers))
+            return gpu_layers;
         
         const vector<ColorModelPtr> models                  = extract_color_models           (layer_infos);
         const vector<CompOp>        comp_ops                = extract_comp_ops               (layer_infos);
