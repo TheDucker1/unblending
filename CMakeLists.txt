@@ -18,6 +18,7 @@ endif()
 
 option(UNBLENDING_BUILD_CLI_APP "Build CLI app" ON )
 option(UNBLENDING_BUILD_GUI_APP "Build GUI app" OFF)
+option(UNBLENDING_BUILD_IMAGE_IO "Build Qt image helpers for library clients" OFF)
 option(UNBLENDING_ENABLE_CUDA "Enable the CUDA dispatcher for public solver calls" OFF)
 option(UNBLENDING_BUILD_TESTS "Build public solver tests" OFF)
 

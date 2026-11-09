@@ -3,8 +3,6 @@
 #include <cfloat>
 #include <thread>
 #include <Eigen/LU>
-#include <QImage>
-#include <QColor>
 #include <tinycolormap.hpp>
 #include <parallel-util.hpp>
 
@@ -49,17 +47,6 @@ namespace unblending
         pixels_ = std::vector<double>(width_ * height_, value);
     }
 
-    void AbstractImage::save(const std::string &file_path) const
-    {
-        QImage q_image(width(), height(), QImage::Format_ARGB32);
-        for (int x = 0; x < width(); ++ x) for (int y = 0; y < height(); ++ y)
-        {
-            const IntColor color = get_color(x, y);
-            q_image.setPixel(x, y, qRgba(color(0), color(1), color(2), color(3)));
-        }
-        q_image.save(QString::fromStdString(file_path));
-    }
-
     AbstractImage::IntColor Image::get_color(int x, int y) const
     {
         const tinycolormap::ColormapType type = tinycolormap::ColormapType::Magma;
@@ -72,54 +59,6 @@ namespace unblending
         Eigen::Vector4d color = get_rgba(x, y);
         for (int i : { 0, 1, 2, 3 }) color(i) = crop(color(i), 0.0, 1.0);
         return IntColor(color(0) * 255, color(1) * 255, color(2) * 255, color(3) * 255);
-    }
-
-    ColorImage::ColorImage(const std::string &file_path)
-    {
-        QImage q_image(QString::fromStdString(file_path));
-        width_  = q_image.width();
-        height_ = q_image.height();
-
-        assert(width() > 0 && height() > 0);
-
-        rgba_ = std::vector<Image>(4, Image(width(), height()));
-        for (int x = 0; x < width(); ++ x) for (int y = 0; y < height(); ++ y)
-        {
-            const QRgb q_color = q_image.pixel(x, y);
-            rgba_[0].set_pixel(x, y, qRed  (q_color) / 255.0);
-            rgba_[1].set_pixel(x, y, qGreen(q_color) / 255.0);
-            rgba_[2].set_pixel(x, y, qBlue (q_color) / 255.0);
-            rgba_[3].set_pixel(x, y, qAlpha(q_color) / 255.0);
-        }
-    }
-
-    ColorImage ColorImage::get_scaled_image(int target_width) const
-    {
-        QImage q_image(width(), height(), QImage::Format_ARGB32);
-        for (int x = 0; x < width(); ++ x) for (int y = 0; y < height(); ++ y)
-        {
-            const IntColor color = get_color(x, y);
-            q_image.setPixel(x, y, qRgba(color(0), color(1), color(2), color(3)));
-        }
-
-        q_image = q_image.scaledToWidth(target_width, Qt::SmoothTransformation);
-
-        ColorImage new_image(q_image.width(), q_image.height());
-
-        for (int x = 0; x < q_image.width(); ++ x) for (int y = 0; y < q_image.height(); ++ y)
-        {
-            const QRgb q_rgba = q_image.pixel(x, y);
-            const Eigen::Vector4d rgba
-            {
-                static_cast<double>(qRed  (q_rgba)) / 255.0,
-                static_cast<double>(qGreen(q_rgba)) / 255.0,
-                static_cast<double>(qBlue (q_rgba)) / 255.0,
-                static_cast<double>(qAlpha(q_rgba)) / 255.0
-            };
-            new_image.set_rgba(x, y, rgba);
-        }
-
-        return new_image;
     }
 
     std::vector<uint8_t> ColorImage::get_rgba_bits() const

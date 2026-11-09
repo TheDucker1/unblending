@@ -3,9 +3,12 @@
 #include <unblending/image_processing.hpp>
 #include <unblending/color_model.hpp>
 #include <unblending/equations.hpp>
+#include <algorithm>
 #include <cmath>
 #include <cfloat>
 #include <iostream>
+#include <limits>
+#include <stdexcept>
 #include <thread>
 #include <nlopt-util.hpp>
 #include <timer.hpp>
@@ -329,20 +332,13 @@ namespace unblending
         return VecX::Zero(alphas.rows());
     }
     
-    vector<ColorImage> perform_matte_refinement(const ColorImage&         image,
-                                                const vector<ColorImage>& layers,
-                                                const vector<LayerInfo>&  layer_infos,
-                                                const bool                has_opaque_background,
-                                                const bool                force_smooth_background,
-                                                const int                 target_concurrency)
+    static vector<ColorImage> refine_cpu(const ColorImage& image,
+                                         const vector<ColorImage>& layers,
+                                         const vector<LayerInfo>& layer_infos,
+                                         bool has_opaque_background,
+                                         bool force_smooth_background,
+                                         int target_concurrency)
     {
-        timer::Timer timer("perform_matte_refinement");
-
-        vector<ColorImage> gpu_layers;
-        if (gpu::try_solve(image, layer_infos, &layers,
-                           gpu_options(has_opaque_background, force_smooth_background), gpu_layers))
-            return gpu_layers;
-        
         const vector<ColorModelPtr> models                  = extract_color_models           (layer_infos);
         const vector<CompOp>        comp_ops                = extract_comp_ops               (layer_infos);
         const vector<BlendMode>     modes                   = extract_blend_modes            (layer_infos);
@@ -442,17 +438,11 @@ namespace unblending
         return refined_layers;
     }
     
-    vector<ColorImage> compute_color_unmixing(const ColorImage&        image,
-                                              const vector<LayerInfo>& layer_infos,
-                                              const bool               has_opaque_background,
-                                              const int                target_concurrency)
+    static vector<ColorImage> unmix_cpu(const ColorImage& image,
+                                        const vector<LayerInfo>& layer_infos,
+                                        bool has_opaque_background,
+                                        int target_concurrency)
     {
-        timer::Timer timer("compute_color_unmixing");
-
-        vector<ColorImage> gpu_layers;
-        if (gpu::try_solve(image, layer_infos, nullptr, gpu_options(has_opaque_background), gpu_layers))
-            return gpu_layers;
-        
         const vector<ColorModelPtr> models                  = extract_color_models           (layer_infos);
         const vector<CompOp>        comp_ops                = extract_comp_ops               (layer_infos);
         const vector<BlendMode>     modes                   = extract_blend_modes            (layer_infos);
@@ -484,6 +474,147 @@ namespace unblending
         return layers;
     }
     
+    vector<ColorImage> compute_color_unmixing(const ColorImage& image,
+                                             const vector<LayerInfo>& layer_infos,
+                                             bool has_opaque_background,
+                                             int target_concurrency)
+    {
+        timer::Timer timer("compute_color_unmixing");
+        vector<ColorImage> output;
+        if (gpu::try_solve(image, layer_infos, nullptr, gpu_options(has_opaque_background), output))
+            return output;
+        return unmix_cpu(image, layer_infos, has_opaque_background, target_concurrency);
+    }
+
+    vector<ColorImage> perform_matte_refinement(const ColorImage& image,
+                                               const vector<ColorImage>& layers,
+                                               const vector<LayerInfo>& layer_infos,
+                                               bool has_opaque_background,
+                                               bool force_smooth_background,
+                                               int target_concurrency)
+    {
+        timer::Timer timer("perform_matte_refinement");
+        vector<ColorImage> output;
+        if (gpu::try_solve(image, layer_infos, &layers,
+                           gpu_options(has_opaque_background, force_smooth_background), output))
+            return output;
+        return refine_cpu(image, layers, layer_infos, has_opaque_background,
+                          force_smooth_background, target_concurrency);
+    }
+
+    namespace
+    {
+        // Normalize the stride once and return the exact size of a packed RGBA stack.
+        std::size_t validate_pixels(RgbImageView& image, const vector<LayerInfo>& layers)
+        {
+            constexpr auto max_int = std::numeric_limits<int>::max();
+            if (!image.data || image.width <= 0 || image.height <= 0 ||
+                image.width > max_int / image.height)
+                throw std::invalid_argument("Invalid RGB image dimensions or data");
+
+            const std::size_t max_doubles = vector<double>().max_size();
+            if (std::size_t(image.width) > max_doubles / 3)
+                throw std::length_error("RGB row is too large");
+
+            const std::size_t row_size = 3 * std::size_t(image.width);
+            if (!image.row_stride) image.row_stride = row_size;
+            if (image.row_stride < row_size || image.size < row_size ||
+                std::size_t(image.height - 1) > (image.size - row_size) / image.row_stride)
+                throw std::invalid_argument("RGB buffer is too small or has an invalid row stride");
+
+            if (layers.empty() || std::any_of(layers.begin(), layers.end(), [](const LayerInfo& layer) {
+                    return !layer.color_model;
+                }))
+                throw std::invalid_argument("Each layer requires a color model");
+
+            const std::size_t pixels = std::size_t(image.width) * image.height;
+            if (layers.size() > std::size_t(max_int) / 4 || pixels > max_doubles / 4 / layers.size())
+                throw std::length_error("RGBA layer stack is too large");
+            return 4 * pixels * layers.size();
+        }
+
+        ColorImage read_rgb(RgbImageView image)
+        {
+            ColorImage result(image.width, image.height);
+            for (int y = 0; y < image.height; ++y)
+                for (int x = 0; x < image.width; ++x)
+                    result.set_rgb(x, y, Eigen::Map<const Vec3>(
+                        image.data + std::size_t(y) * image.row_stride + 3 * std::size_t(x)));
+            return result;
+        }
+
+        vector<ColorImage> read_layers(RgbaLayersView layers, int width, int height, std::size_t count)
+        {
+            vector<ColorImage> result;
+            result.reserve(count);
+            const double* pixel = layers.data;
+            for (std::size_t l = 0; l < count; ++l)
+            {
+                result.emplace_back(width, height);
+                for (int y = 0; y < height; ++y)
+                    for (int x = 0; x < width; ++x, pixel += 4)
+                        result.back().set_rgba(x, y, Eigen::Map<const Vec4>(pixel));
+            }
+            return result;
+        }
+
+        vector<double> pack_layers(const vector<ColorImage>& layers, std::size_t size)
+        {
+            vector<double> output(size);
+            double* pixel = output.data();
+            for (const auto& layer : layers)
+                for (int y = 0; y < layer.height(); ++y)
+                    for (int x = 0; x < layer.width(); ++x, pixel += 4)
+                    {
+                        Eigen::Map<Vec4> rgba(pixel);
+                        rgba = layer.get_rgba(x, y);
+                    }
+            return output;
+        }
+    }
+
+    vector<double> compute_color_unmixing(RgbImageView image,
+                                         const vector<LayerInfo>& layer_infos,
+                                         bool has_opaque_background,
+                                         int target_concurrency)
+    {
+        const auto size = validate_pixels(image, layer_infos);
+        timer::Timer timer("compute_color_unmixing");
+        vector<double> output;
+        if (gpu::try_solve_pixels(image, layer_infos, nullptr,
+                                  gpu_options(has_opaque_background), output))
+            return output;
+        return pack_layers(unmix_cpu(read_rgb(image), layer_infos,
+                                     has_opaque_background, target_concurrency), size);
+    }
+
+    vector<double> perform_matte_refinement(RgbImageView image, RgbaLayersView layers,
+                                           const vector<LayerInfo>& layer_infos,
+                                           bool has_opaque_background,
+                                           bool force_smooth_background,
+                                           int target_concurrency)
+    {
+        const auto size = validate_pixels(image, layer_infos);
+        if (!layers.data || layers.size != size)
+            throw std::invalid_argument("Refinement requires one packed RGBA image per layer");
+        if (force_smooth_background && !has_opaque_background)
+            throw std::invalid_argument("Smoothing requires an opaque background");
+        const auto comp_ops = extract_comp_ops(layer_infos);
+        if (!std::all_of(comp_ops.begin(), comp_ops.end(), [](const CompOp& op) { return op.is_plus(); }) &&
+            !std::all_of(comp_ops.begin(), comp_ops.end(), [](const CompOp& op) { return op.is_source_over(); }))
+            throw std::invalid_argument("Refinement requires an all-Plus or all-SourceOver stack");
+
+        timer::Timer timer("perform_matte_refinement");
+        vector<double> output;
+        if (gpu::try_solve_pixels(image, layer_infos, &layers,
+                                  gpu_options(has_opaque_background, force_smooth_background), output))
+            return output;
+        return pack_layers(refine_cpu(read_rgb(image),
+                                      read_layers(layers, image.width, image.height, layer_infos.size()),
+                                      layer_infos, has_opaque_background, force_smooth_background,
+                                      target_concurrency), size);
+    }
+
     ColorImage composite_layers(const vector<ColorImage>& layers,
                                 const vector<CompOp>&     comp_ops,
                                 const vector<BlendMode>&  modes)

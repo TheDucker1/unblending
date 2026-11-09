@@ -131,36 +131,6 @@ namespace unblending
         }
     }
     
-    void export_layers(const std::vector<ColorImage>& layers,
-                       const std::string&             output_directory_path,
-                       const std::string&             file_name_prefix,
-                       const bool                     with_alpha_channel,
-                       const bool                     with_blend_mode_suffix,
-                       const std::vector<LayerInfo>&  layer_infos)
-    {
-        assert((!with_blend_mode_suffix) || layer_infos.size() == layers.size());
-        
-        for (int index = 0; index < layers.size(); ++ index)
-        {
-            const std::string suffix = with_blend_mode_suffix ? "_" + retrieve_name(layer_infos[index].blend_mode) : "";
-            layers[index].save(output_directory_path + "/" + file_name_prefix + "_" + std::to_string(index) + suffix + ".png");
-            if (with_alpha_channel)
-            {
-                layers[index].get_a().save(output_directory_path + "/" + file_name_prefix + "-alpha_" + std::to_string(index) + ".png");
-            }
-        }
-    }
-    
-    void export_models(const vector<ColorModelPtr>& models,
-                       const std::string&           output_directory_path,
-                       const std::string&           file_name_prefix)
-    {
-        for (int index = 0; index < models.size(); ++ index)
-        {
-            models[index]->generate_visualization().save(output_directory_path + "/" + file_name_prefix + "_" + std::to_string(index) + ".png");
-        }
-    }
-    
     void export_layer_infos(const std::vector<LayerInfo>& layer_infos,
                             const std::string& output_directory_path)
     {

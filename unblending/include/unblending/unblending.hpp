@@ -6,6 +6,7 @@
 #include <unblending/layer_info.hpp>
 #include <unblending/color_model.hpp>
 #include <unblending/image_processing.hpp>
+#include <unblending/pixels.hpp>
 
 namespace unblending
 {
@@ -35,7 +36,7 @@ namespace unblending
                                 const std::vector<CompOp>&     comp_ops,
                                 const std::vector<BlendMode>&  modes);
     
-    /// \brief Export layers as image files.
+    /// \brief Export layers as image files. Requires unblending_image_io.
     void export_layers(const std::vector<ColorImage>& layers,
                        const std::string&             output_directory_path,
                        const std::string&             file_name_prefix,
@@ -43,7 +44,7 @@ namespace unblending
                        const bool                     with_blend_mode_suffix = false,
                        const std::vector<LayerInfo>&  layer_infos            = {});
     
-    /// \brief Export color models as image files.
+    /// \brief Export color models as image files. Requires unblending_image_io.
     void export_models(const std::vector<ColorModelPtr>& models,
                        const std::string& output_directory_path,
                        const std::string& file_name_prefix);

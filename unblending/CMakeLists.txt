@@ -6,13 +6,12 @@ if((NOT TARGET Eigen3::Eigen) AND (DEFINED EIGEN3_INCLUDE_DIR))
 	add_library(Eigen3::Eigen ALIAS AliasEigen3)
 endif()
 
-find_package(Qt5Gui REQUIRED)
 find_package(Threads REQUIRED)
 
 file(GLOB headers include/unblending/*.hpp)
 file(GLOB sources src/*.cpp)
 add_library(unblending STATIC ${headers} ${sources})
-target_link_libraries(unblending Eigen3::Eigen Qt5::Gui nlopt Threads::Threads json11 tinycolormap timer parallel-util nlopt-util)
+target_link_libraries(unblending Eigen3::Eigen nlopt Threads::Threads json11 tinycolormap timer parallel-util nlopt-util)
 target_include_directories(
 	unblending
 	PUBLIC
@@ -42,6 +41,13 @@ endif()
 
 install(FILES ${headers} DESTINATION include/unblending)
 install(TARGETS unblending ARCHIVE DESTINATION lib)
+
+if(UNBLENDING_BUILD_IMAGE_IO OR UNBLENDING_BUILD_CLI_APP OR UNBLENDING_BUILD_GUI_APP)
+	find_package(Qt5Gui REQUIRED)
+	add_library(unblending_image_io STATIC io/image_qt.cpp)
+	target_link_libraries(unblending_image_io PUBLIC unblending PRIVATE Qt5::Gui)
+	install(TARGETS unblending_image_io ARCHIVE DESTINATION lib)
+endif()
 
 if(UNBLENDING_BUILD_TESTS)
 	add_executable(unblending_solver_dispatch_test tests/solver_dispatch.cpp)

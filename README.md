@@ -11,6 +11,36 @@ Unblending is a C++ library for decomposing a target image into a set of semi-tr
 - `unblending-cli` is an executable with a command line interface to use the main functionality.
 - `unblending-gui` is an executable with a graphical user interface to use the main functionality with interactive specification of necessary input parameters.
 
+## Split layers from pixel buffers
+
+The C++ library takes decoded RGB values through `<unblending/pixels.hpp>`.
+Pass normalized RGB doubles in row order. An optional row stride, measured in
+doubles, lets you use padded rows or a region of a larger buffer. Both passes
+return packed RGBA doubles in `[layer][row][column][channel]` order, from
+bottom to top, with straight alpha.
+
+```cpp
+unblending::RgbImageView image(rgb.data(), rgb.size(), width, height);
+auto first = unblending::compute_color_unmixing(image, layer_infos, true);
+auto layers = unblending::perform_matte_refinement(
+    image, {first.data(), first.size()}, layer_infos, true, false);
+```
+
+To build the library without Qt, leave both applications and optional image
+I/O disabled. Add `-DUNBLENDING_ENABLE_CUDA=ON` to use the same buffer API
+with CUDA.
+
+```sh
+cmake -S . -B build-core -DUNBLENDING_BUILD_CLI_APP=OFF \
+  -DUNBLENDING_BUILD_GUI_APP=OFF -DUNBLENDING_BUILD_IMAGE_IO=OFF
+cmake --build build-core --target unblending --parallel
+```
+
+The CLI and GUI build the separate `unblending_image_io` target for image
+loading, saving, and resizing. Library clients who use the legacy file-based
+image helpers can enable it explicitly with `-DUNBLENDING_BUILD_IMAGE_IO=ON`
+and link that target.
+
 ## CUDA through the public API
 
 Build with `UNBLENDING_ENABLE_CUDA=ON` to use CUDA through the existing
@@ -62,7 +92,7 @@ Unblending Web App: <https://unblending.ongaaccel.jp>
 
 ## Prerequisites
 
-Eigen (3.x.x) and Qt (5.x.x) need to be installed beforehand.
+The solver library requires Eigen (3.x.x). The CLI, GUI, and optional image I/O target also require Qt5.
 
 ### macOS
 

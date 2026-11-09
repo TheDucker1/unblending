@@ -14,6 +14,7 @@ namespace unblending
 
         using IntColor = Eigen::Vector4i;
 
+        /// Requires the optional unblending_image_io target.
         void save(const std::string& file_path) const;
 
         int width()  const { return width_;  }
@@ -102,6 +103,7 @@ namespace unblending
             rgba_ = std::vector<Image>(4, Image(width, height, 1.0));
         }
 
+        /// Requires the optional unblending_image_io target.
         ColorImage(const std::string& file_path);
 
         void set_rgb(int x, int y, const Eigen::Vector3d& rgb)
@@ -164,6 +166,7 @@ namespace unblending
         void set_b(const Image& b) { rgba_[2] = b; }
         void set_a(const Image& a) { rgba_[3] = a; }
 
+        /// Requires the optional unblending_image_io target.
         ColorImage get_scaled_image(int target_width) const;
 
     private:

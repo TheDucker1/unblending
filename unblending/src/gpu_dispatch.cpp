@@ -1,6 +1,7 @@
 #include "gpu_dispatch.hpp"
 #include <unblending/unblending.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <cstring>
 #include <limits>
@@ -47,9 +48,11 @@ std::vector<Layer> describe(const std::vector<LayerInfo>& layers)
 } // namespace
 #endif
 
-bool try_solve(const ColorImage& image, const std::vector<LayerInfo>& layers,
-               const std::vector<ColorImage>* first, Options options,
-               std::vector<ColorImage>& output)
+namespace {
+template<class ReadRgb, class ReadRgba>
+bool try_solve_planes(int w, int h, const std::vector<LayerInfo>& layers, bool refinement,
+                      bool valid_layers, Options options, ReadRgb read_rgb, ReadRgba read_rgba,
+                      std::vector<double>& output)
 {
     const char* backend = std::getenv("UNBLENDING_BACKEND");
     const bool required = backend && std::strcmp(backend, "cuda") == 0;
@@ -63,62 +66,39 @@ bool try_solve(const ColorImage& image, const std::vector<LayerInfo>& layers,
 #else
     try
     {
-        const int w = image.width(), h = image.height();
         // The streaming filter indexes up to sixteen planes with signed ints.
         constexpr size_t max_pixels = (std::numeric_limits<int>::max() - 255) / 16;
         if (w <= 0 || h <= 0 || size_t(w) > max_pixels / size_t(h) ||
-            layers.empty() || layers.size() > 4096 ||
-            (first && first->size() != layers.size()))
+            layers.empty() || layers.size() > 4096 || !valid_layers)
             throw std::invalid_argument("Image or layer dimensions are outside the CUDA solver domain");
         if (!options.supported_build)
             throw std::invalid_argument("This solver build uses CPU-specific initialization or tolerances");
 
         auto model = describe(layers);
-        if (first)
-        {
-            for (const auto& layer : *first)
-                if (layer.width() != w || layer.height() != h)
-                    throw std::invalid_argument("Refinement requires layers with the input image dimensions");
-        }
         require_device();
         const size_t n = size_t(w) * h, l = layers.size();
         std::vector<double> rgb(3 * n);
-        std::vector<double> initial(first ? 4 * l * n : 0);
+        std::vector<double> initial(refinement ? 4 * l * n : 0);
         for (int y = 0; y < h; ++y)
             for (int x = 0; x < w; ++x)
             {
                 const size_t i = size_t(y) * w + x;
-                const auto pixel = image.get_rgb(x, y);
+                const auto pixel = read_rgb(x, y);
                 for (int r = 0; r < 3; ++r) rgb[size_t(r) * n + i] = pixel(r);
             }
-        if (first)
+        if (refinement)
             for (size_t layer = 0; layer < l; ++layer)
                 for (int y = 0; y < h; ++y)
                     for (int x = 0; x < w; ++x)
                     {
                         const size_t i = size_t(y) * w + x;
-                        const auto pixel = (*first)[layer].get_rgba(x, y);
+                        const auto pixel = read_rgba(layer, x, y);
                         initial[layer * n + i] = pixel(3);
                         for (int r = 0; r < 3; ++r)
                             initial[(l + 3 * layer + r) * n + i] = pixel(r);
                     }
 
-        const auto solved = solve_cuda(w, h, model, rgb, first ? &initial : nullptr, options);
-        std::vector<ColorImage> result;
-        result.reserve(l);
-        for (size_t layer = 0; layer < l; ++layer)
-        {
-            result.emplace_back(w, h);
-            for (int y = 0; y < h; ++y)
-                for (int x = 0; x < w; ++x)
-                {
-                    const size_t i = size_t(y) * w + x;
-                    const size_t color = (l + 3 * layer) * n + i;
-                    result.back().set_rgba(x, y, Vec3(solved[color], solved[color + n], solved[color + 2 * n]),
-                                           solved[layer * n + i]);
-                }
-        }
-        output = std::move(result);
+        output = solve_cuda(w, h, model, rgb, refinement ? &initial : nullptr, options);
         return true;
     }
     catch (const std::logic_error& error)
@@ -131,6 +111,76 @@ bool try_solve(const ColorImage& image, const std::vector<LayerInfo>& layers,
     }
     return false;
 #endif
+}
+
+} // namespace
+
+bool try_solve(const ColorImage& image, const std::vector<LayerInfo>& layers,
+               const std::vector<ColorImage>* first, Options options,
+               std::vector<ColorImage>& output)
+{
+    const int w = image.width(), h = image.height();
+    const bool valid_layers = !first || (first->size() == layers.size() &&
+        std::all_of(first->begin(), first->end(), [=](const ColorImage& layer) {
+            return layer.width() == w && layer.height() == h;
+        }));
+    const auto read_rgb = [&](int x, int y) { return image.get_rgb(x, y); };
+    const auto read_rgba = [&](std::size_t l, int x, int y) { return (*first)[l].get_rgba(x, y); };
+    std::vector<double> solved;
+    if (!try_solve_planes(w, h, layers, first != nullptr, valid_layers, options,
+                          read_rgb, read_rgba, solved))
+        return false;
+
+    const std::size_t n = std::size_t(w) * h, layer_count = layers.size();
+    std::vector<ColorImage> result;
+    result.reserve(layer_count);
+    for (std::size_t l = 0; l < layer_count; ++l)
+    {
+        result.emplace_back(w, h);
+        for (int y = 0; y < h; ++y)
+            for (int x = 0; x < w; ++x)
+            {
+                const std::size_t i = std::size_t(y) * w + x;
+                const std::size_t color = (layer_count + 3 * l) * n + i;
+                result.back().set_rgba(x, y, Vec3(solved[color], solved[color + n], solved[color + 2 * n]),
+                                       solved[l * n + i]);
+            }
+    }
+    output = std::move(result);
+    return true;
+}
+
+bool try_solve_pixels(RgbImageView image, const std::vector<LayerInfo>& layers,
+                      const RgbaLayersView* first, Options options,
+                      std::vector<double>& output)
+{
+    const std::size_t n = std::size_t(image.width) * image.height;
+    const auto read_rgb = [&](int x, int y) {
+        const double* rgb = image.data + y * image.row_stride + 3 * std::size_t(x);
+        return Vec3(rgb[0], rgb[1], rgb[2]);
+    };
+    const auto read_rgba = [&](std::size_t l, int x, int y) {
+        const double* rgba = first->data + 4 * (l * n + std::size_t(y) * image.width + x);
+        return Vec4(rgba[0], rgba[1], rgba[2], rgba[3]);
+    };
+    std::vector<double> solved;
+    if (!try_solve_planes(image.width, image.height, layers, first != nullptr, true,
+                          options, read_rgb, read_rgba, solved))
+        return false;
+
+    const std::size_t layer_count = layers.size();
+    output.resize(solved.size());
+    for (std::size_t l = 0; l < layer_count; ++l)
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            const std::size_t color = (layer_count + 3 * l) * n + i;
+            double* rgba = output.data() + 4 * (l * n + i);
+            rgba[0] = solved[color];
+            rgba[1] = solved[color + n];
+            rgba[2] = solved[color + 2 * n];
+            rgba[3] = solved[l * n + i];
+        }
+    return true;
 }
 
 } // namespace gpu

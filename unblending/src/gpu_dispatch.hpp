@@ -5,6 +5,8 @@
 namespace unblending {
 class ColorImage;
 struct LayerInfo;
+struct RgbImageView;
+struct RgbaLayersView;
 
 namespace gpu {
 struct Layer {
@@ -24,6 +26,10 @@ struct Options {
 bool try_solve(const ColorImage& image, const std::vector<LayerInfo>& layers,
                const std::vector<ColorImage>* first, Options options,
                std::vector<ColorImage>& output);
+
+bool try_solve_pixels(RgbImageView image, const std::vector<LayerInfo>& layers,
+                      const RgbaLayersView* first, Options options,
+                      std::vector<double>& output);
 
 #ifdef UNBLENDING_HAS_CUDA
 void require_device();
