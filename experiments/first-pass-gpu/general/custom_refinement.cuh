@@ -1,6 +1,6 @@
 #pragma once
 #include "range_union.cuh"
-#include "custom_host.hpp"
+#include "custom_model.hpp"
 #include "coupled_sqp.cuh"
 #include "cube_retract.cuh"
 

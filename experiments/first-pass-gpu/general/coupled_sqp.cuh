@@ -1,5 +1,5 @@
 #pragma once
-#include "custom_host.hpp"
+#include "custom_model.hpp"
 #include "constraint_restore.cuh"
 #include "register_restore3.cuh"
 #include "algebraic_retract.cuh"
