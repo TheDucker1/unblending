@@ -19,6 +19,7 @@ endif()
 option(UNBLENDING_BUILD_CLI_APP "Build CLI app" ON )
 option(UNBLENDING_BUILD_GUI_APP "Build GUI app" OFF)
 option(UNBLENDING_ENABLE_CUDA "Enable the CUDA dispatcher for public solver calls" OFF)
+option(UNBLENDING_BUILD_TESTS "Build public solver tests" OFF)
 
 if(UNBLENDING_ENABLE_CUDA)
 	if(CMAKE_VERSION VERSION_LESS 3.18)
@@ -26,6 +27,13 @@ if(UNBLENDING_ENABLE_CUDA)
 	endif()
 	cmake_policy(SET CMP0104 NEW)
 	enable_language(CUDA)
+endif()
+
+if(UNBLENDING_BUILD_TESTS)
+	if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/unblending/tests/solver_dispatch.cpp")
+		message(FATAL_ERROR "UNBLENDING_BUILD_TESTS requires the local dispatcher test source")
+	endif()
+	enable_testing()
 endif()
 
 

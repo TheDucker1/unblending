@@ -1,0 +1,10 @@
+# Local tests and research artifacts. Committed CUDA sources remain tracked.
+/unblending/tests/
+/experiments/
+
+# Local build and CLI output directories.
+/.dev/
+/build/
+/build-*/
+/cmake-build-*/
+/out/

@@ -11,6 +11,33 @@ Unblending is a C++ library for decomposing a target image into a set of semi-tr
 - `unblending-cli` is an executable with a command line interface to use the main functionality.
 - `unblending-gui` is an executable with a graphical user interface to use the main functionality with interactive specification of necessary input parameters.
 
+## CUDA through the public API
+
+Build with `UNBLENDING_ENABLE_CUDA=ON` to use CUDA through the existing
+`compute_color_unmixing()` and `perform_matte_refinement()` calls. Their
+signatures and return types are unchanged. The CLI uses these calls too.
+
+```sh
+cmake -S . -B build-cuda -DUNBLENDING_ENABLE_CUDA=ON
+cmake --build build-cuda --parallel
+```
+
+This option requires CMake 3.18 or newer, Python 3 for kernel source generation,
+and the NVIDIA CUDA toolkit. Set `CMAKE_CUDA_ARCHITECTURES` when targeting a
+specific GPU architecture. A default build has no CUDA dependency.
+
+Set `UNBLENDING_BACKEND` before running the application:
+
+- `auto` or unset uses CUDA for supported Gaussian layer configurations when a
+  device is available. It falls back to the CPU for host-only color models,
+  unsupported configurations, or CUDA failures.
+- `cpu` uses the original CPU solver. `target_concurrency` controls its worker count.
+- `cuda` requires CUDA and reports an exception if the call cannot complete on
+  the device. Use this setting to verify GPU execution.
+
+Each public call accepts and returns host images. During matte refinement the
+guided filter and color solve share device data.
+
 ## Publication
 
 Yuki Koyama and Masataka Goto. 2018. Decomposing Images into Layers with Advanced Color Blending. Comput. Graph. Forum 37, 7, pp.397--407 (2018). (a.k.a. Proceedings of Pacific Graphics 2018) DOI: <https://doi.org/10.1111/cgf.13577>
