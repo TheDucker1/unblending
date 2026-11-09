@@ -35,7 +35,7 @@ template<class T,class Prior,class Model=Layer>struct Optimizer {
         T scaling=1;bool have_scaling=false;
         for(int j=0;j<valid;++j){int slot=(next-1-j+H)%H;T dot=0,sy=0,ss=0,yy=0;
             for(int k=0;k<N;++k)if(free[k]){T a=s[slot*N+k],b=y[slot*N+k];dot+=a*q[k];sy+=a*b;ss+=a*a;yy+=b*b;}
-            inverse[slot]=sy>T(1e-9)*configured::root(ss*yy)&&sy>0&&std::isfinite(1/sy)?T(1)/sy:T(0);
+            inverse[slot]=sy>T(1e-9)*configured::root(ss*yy)&&sy>0&&configured::isfinite(1/sy)?T(1)/sy:T(0);
             coeff[slot]=dot*inverse[slot];
             for(int k=0;k<N;++k)if(free[k])q[k]-=coeff[slot]*y[slot*N+k];
             if(!have_scaling&&inverse[slot]>0&&yy>0){scaling=sy/yy;have_scaling=true;}
@@ -81,7 +81,7 @@ template<class T,class Prior,class Model=Layer>struct Optimizer {
             if(derivative&&eliminate_gray)project_gray_gradient(model,p,gradient);
             T norm=0,tol=T(opt.outer_tolerance*opt.outer_tolerance);for(int r=0;r<C;++r)norm+=residual[r]*residual[r];
             bool feasible=norm<tol;
-            if(std::isfinite(energy)&&std::isfinite(norm)&&(!have_best||(feasible&&(best_norm>=tol||energy<best_energy))||(!feasible&&best_norm>=tol&&norm<best_norm))){
+            if(configured::isfinite(energy)&&configured::isfinite(norm)&&(!have_best||(feasible&&(best_norm>=tol||energy<best_energy))||(!feasible&&best_norm>=tol&&norm<best_norm))){
                 have_best=true;best_norm=norm;best_energy=energy;for(int k=0;k<N;++k)best[k]=point[k];}
             return value;};
         for(int start=0;start<opt.starts;++start){
@@ -112,7 +112,7 @@ template<class T,class Prior,class Model=Layer>struct Optimizer {
                 T f=evaluate(x,g,rho,true),oldnorm=0;for(int r=0;r<C;++r)oldnorm+=residual[r]*residual[r];int valid=0,next=0;
                 for(int iteration=0;iteration<opt.inner;++iteration){++work.iterations;T pg2=0;
                     for(int k=0;k<N;++k){T lo=bound(p,alpha,bg,k,false),hi=bound(p,alpha,bg,k,true);bool fixed=lo==hi||(x[k]<=lo&&g[k]>0)||(x[k]>=hi&&g[k]<0);trial[k]=fixed?0:1;direction[k]=fixed?0:g[k];pg2+=direction[k]*direction[k];}
-                    if(pg2<T(1e-16)||!std::isfinite(f))break;
+                    if(pg2<T(1e-16)||!configured::isfinite(f))break;
                     inverse_step(N,H,valid,next,constant(trial),constant(g),constant(history_s),constant(history_y),direction,coeff,inverse);
                     T descent=0;
                     for(int k=0;k<N;++k){T lo=bound(p,alpha,bg,k,false),hi=bound(p,alpha,bg,k,true),d=-direction[k];if(lo==hi||(x[k]<=lo&&d<0)||(x[k]>=hi&&d>0))d=0;direction[k]=d;descent+=d*g[k];}
@@ -123,7 +123,7 @@ template<class T,class Prior,class Model=Layer>struct Optimizer {
                             for(int k=0;k<N;++k){T lo=bound(p,alpha,bg,k,false),hi=bound(p,alpha,bg,k,true);trial[k]=maximum_value(lo,minimum_value(hi,x[k]+step*direction[k]));T delta=trial[k]-x[k];slope+=g[k]*delta;motion+=delta*delta;}
                             if(motion==0)break;
                             candidate=evaluate(trial,newg,rho,false);++work.backtracks;
-                            if(slope<0&&std::isfinite(candidate)&&candidate<=f+T(.0001)*slope){accepted=true;break;}step*=T(.5);
+                            if(slope<0&&configured::isfinite(candidate)&&candidate<=f+T(.0001)*slope){accepted=true;break;}step*=T(.5);
                         }
                         if(!accepted){valid=0;next=0;for(int k=0;k<N;++k){T lo=bound(p,alpha,bg,k,false),hi=bound(p,alpha,bg,k,true);direction[k]=(lo==hi||(x[k]<=lo&&g[k]>0)||(x[k]>=hi&&g[k]<0))?0:-g[k];}}
                     }
@@ -132,7 +132,7 @@ template<class T,class Prior,class Model=Layer>struct Optimizer {
                     candidate=evaluate(trial,newg,rho,true);T sy=0,ss=0,yy=0,maxmotion=0;
                     for(int k=0;k<N;++k){T s=trial[k]-x[k],y=newg[k]-g[k];sy+=s*y;ss+=s*s;yy+=y*y;maxmotion=maximum_value(maxmotion,std::abs(s)/(T(1)+std::abs(x[k])));}
                     if(canonical){valid=0;next=0;}
-                    else if(sy>T(1e-9)*configured::root(ss*yy)&&sy>0&&std::isfinite(1/sy)){
+                    else if(sy>T(1e-9)*configured::root(ss*yy)&&sy>0&&configured::isfinite(1/sy)){
                         for(int k=0;k<N;++k){history_s[next*N+k]=trial[k]-x[k];history_y[next*N+k]=newg[k]-g[k];}inverse[next]=1/sy;next=(next+1)%H;valid=minimum_value(valid+1,H);}
                     T delta=std::abs(f-candidate),size=T(.5)*(std::abs(f)+std::abs(candidate));for(int k=0;k<N;++k){x[k]=trial[k];g[k]=newg[k];}f=candidate;
                     if(!canonical&&(delta<T(opt.inner_tolerance)*size||maxmotion<T(opt.inner_tolerance)))break;

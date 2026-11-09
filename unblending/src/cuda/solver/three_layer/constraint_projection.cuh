@@ -27,7 +27,7 @@ template<int Mode,class Model>REG3_HD void descend(Point& current,Evaluation cac
     for(int iteration=0;iteration<iterations;++iteration){
         if(value<best_value){best=current;best_value=value;}if(value<=goal)break;
         Jacobian j=jacobian(current,cache,Mode,Mode);Step gradient=step(current,j,cache.residual);Matrix matrix=gram(j,gradient.mask);V dual;
-        bool solved=solve(matrix,cache.residual,dual);float tr=trace(matrix);if(!solved&&tr>0&&std::isfinite(tr))solved=cold_solve<Model>(matrix,cache.residual,dual);
+        bool solved=solve(matrix,cache.residual,dual);float tr=trace(matrix);if(!solved&&tr>0&&configured::isfinite(tr))solved=cold_solve<Model>(matrix,cache.residual,dual);
         Step normal;if(solved)normal=step(current,j,dual);Point previous;bool previous_valid=false,moved=false;
         #pragma unroll 1
         for(int method=0;method<2&&!moved;++method){

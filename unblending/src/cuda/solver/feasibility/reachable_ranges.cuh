@@ -54,7 +54,7 @@ template<class T>HD bool weights(const general::Layer& m,T a,T destination_alpha
     next=T(m.X)*a*destination_alpha+T(m.Y)*a*(1-destination_alpha)+T(m.Z)*destination_alpha*(1-a);
     T den=next>T(1e-12)?next:T(1);u=a*destination_alpha/den;v=T(m.Y)*a*(1-destination_alpha)/den;w=T(m.Z)*destination_alpha*(1-a)/den;
     T eps=T(64)*std::numeric_limits<T>::epsilon()*(T(1)+std::abs(u)+std::abs(v)+std::abs(w));
-    return std::isfinite(next)&&std::isfinite(u)&&std::isfinite(v)&&std::isfinite(w)&&u>=-eps&&v>=-eps&&w>=-eps;
+    return configured::isfinite(next)&&configured::isfinite(u)&&configured::isfinite(v)&&configured::isfinite(w)&&u>=-eps&&v>=-eps&&w>=-eps;
 }
 template<class T>HD bool reachable(int mode,T low,T high,T u,T v,T w,T& out_low,T& out_high){
     T eps=T(64)*std::numeric_limits<T>::epsilon()*(T(1)+std::abs(low)+std::abs(high));
@@ -64,7 +64,7 @@ template<class T>HD bool reachable(int mode,T low,T high,T u,T v,T w,T& out_low,
         for(int side=0;side<2;++side){T value=apply(mode,T(side),d,u,v,w);if(value<out_low)out_low=value;if(value>out_high)out_high=value;}
         if(mode==10&&d>=0&&d<=1){T value=(v+w)*d;if(value<out_low)out_low=value;if(value>out_high)out_high=value;}
     }
-    return std::isfinite(out_low)&&std::isfinite(out_high);
+    return configured::isfinite(out_low)&&configured::isfinite(out_high);
 }
 // Intersect p*d+q <= target (or >= target) with an existing interval.
 template<class T>HD bool inequality(T p,T q,T target,bool below,T& low,T& high){
@@ -167,16 +167,16 @@ template<class T,class Input=T,class Output=T,class Model=general::Layer>HD int 
     general::View<const Input> initial,general::View<const Input> target,general::View<const Input> alpha,general::View<const Input> background,
     general::View<Output> output,general::View<T> scratch,T tolerance,T anchor=T(0),bool reuse_ranges=false){
     int L=p.layers;bool opaque_so=opaque_source_over(models,p)&&alpha[0]==1;auto warm=[&](int l,int r){T value=T(initial[L+3*l+r]);if(anchor!=0)value+=anchor*(T(models[l].mean[r])-value);return configured::clip(value);};auto at=[&](int plane)->T&{return scratch[plane];};
-    for(int l=0;l<L;++l){Input a=alpha[l];if(!std::isfinite(a)||a<0||a>1||(p.opaque&&l==0&&a!=1))return 4;output[l]=a;
+    for(int l=0;l<L;++l){Input a=alpha[l];if(!configured::isfinite(a)||a<0||a>1||(p.opaque&&l==0&&a!=1))return 4;output[l]=a;
         for(int r=0;r<3;++r)output[L+3*l+r]=warm(l,r);if(models[l].gray)return 8;}
-    T current[3];for(int r=0;r<3;++r){Input bg=background[r];if(!std::isfinite(bg)||bg<0||bg>1)return 4;
+    T current[3];for(int r=0;r<3;++r){Input bg=background[r];if(!configured::isfinite(bg)||bg<0||bg>1)return 4;
         current[r]=p.smooth?T(bg):warm(0,r);if(!reuse_ranges){at(r)=p.smooth?T(bg):T(0);at(3*L+r)=p.smooth?T(bg):T(1);}at(6*L+r)=current[r];if(p.smooth)output[L+r]=bg;}
     T da=T(alpha[0]);at(9*L)=da;
     for(int l=1;l<L;++l){T next,u,v,w;if(!weights(models[l],T(alpha[l]),da,next,u,v,w,opaque_so))return 8;if(!reuse_ranges)at(9*L+l)=next;
         for(int r=0;r<3;++r){if(!reuse_ranges&&!reachable(models[l].mode,at(3*(l-1)+r),at(3*L+3*(l-1)+r),u,v,w,at(3*l+r),at(3*L+3*l+r)))return 8;
             current[r]=apply(models[l].mode,warm(l,r),current[r],u,v,w);at(6*L+3*l+r)=current[r];}da=next;}
     T desired[3],goal[3];bool projected=false;
-    for(int r=0;r<3;++r){T value=T(target[r]),low=at(3*(L-1)+r),high=at(3*L+3*(L-1)+r);if(!std::isfinite(value))return 4;
+    for(int r=0;r<3;++r){T value=T(target[r]),low=at(3*(L-1)+r),high=at(3*L+3*(L-1)+r);if(!configured::isfinite(value))return 4;
         desired[r]=goal[r]=value<low?low:(value>high?high:value);projected|=goal[r]!=value;}
     unsigned active_channels=7;
     for(int l=L-1;l>0&&active_channels;--l){T next,u,v,w;if(!weights(models[l],T(alpha[l]),at(9*L+l-1),next,u,v,w,opaque_so))return 8;
@@ -198,7 +198,7 @@ template<class T,class Input=T,class Output=T,class Model=general::Layer>HD int 
     for(int r=0;r<3;++r)current[r]=T(output[L+r]);da=T(alpha[0]);
     for(int l=1;l<L;++l){T next,u,v,w;if(!weights(models[l],T(alpha[l]),da,next,u,v,w,opaque_so))return 8;for(int r=0;r<3;++r)current[r]=apply(models[l].mode,T(output[L+3*l+r]),current[r],u,v,w);da=next;}
     T error=0;for(int r=0;r<3;++r){T delta=current[r]-goal[r];error+=delta*delta;}
-    if(!std::isfinite(error)||error>tolerance*tolerance)return 3;return projected?5:0;
+    if(!configured::isfinite(error)||error>tolerance*tolerance)return 3;return projected?5:0;
 }
 // Legacy full-image planes, retained for CPU and untiled GPU controls.
 template<class T,class Input=T,class Output=T,class Model=general::Layer>HD int pixel(const Model* models,general::Problem p,int n,int index,

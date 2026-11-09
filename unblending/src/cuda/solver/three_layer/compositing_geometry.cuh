@@ -36,7 +36,7 @@ REG3_HD Evaluation evaluate(Point x,V target,int lower,int upper){
     float result=0,d=e.residual.r;result+=d*d;d=e.residual.g;result+=d*d;d=e.residual.b;result+=d*d;result+=0.f;
     float length=0;length+=x.bg*x.bg;length+=x.bg*x.bg;length+=x.bg*x.bg;length=::sqrtf(length);d=float(1.7320508075688772935)*x.bg-length;result+=d*d;result+=d*d;result+=d*d;
     length=0;length+=x.top*x.top;length+=x.top*x.top;length+=x.top*x.top;length=::sqrtf(length);d=float(1.7320508075688772935)*x.top-length;result+=d*d;result+=d*d;result+=d*d;
-    e.value=std::isfinite(result)?result:INFINITY;return e;
+    e.value=configured::isfinite(result)?result:INFINITY;return e;
 }
 REG3_HD float norm(Point x,V target,int lower,int upper){return evaluate(x,target,lower,upper).value;}
 REG3_HD void channel(float source,float bg,float a,float top,float u,float middle,float fmiddle,float ftop,int lower,int upper,float& ja,float& ju,float& jb,float& jc,float& jt){
@@ -66,15 +66,15 @@ REG3_HD Matrix gram(Jacobian j,unsigned mask){
 }
 REG3_HD float trace(Matrix m){float t=0;t+=m.d0;t+=m.d1;t+=m.d2;return t;}
 REG3_HD bool solve(Matrix m,V rhs,V& x){
-    float t=m.d0+m.d1+m.d2;if(!(t>0&&std::isfinite(t)))return false;float scale=1/t,ridge=1e-6f;
+    float t=m.d0+m.d1+m.d2;if(!(t>0&&configured::isfinite(t)))return false;float scale=1/t,ridge=1e-6f;
     float a00=m.d0*scale+ridge,a11=m.d1*scale+ridge,a22=m.d2*scale+ridge,a01=(m.x01+m.x01)*.5f*scale,a02=(m.x02+m.x02)*.5f*scale,a12=(m.x12+m.x12)*.5f*scale;
     if(!(a00>ridge*.25f))return false;float l10=a01/a00,l20=a02/a00,d1=::fmaf(-l10,a01,a11),off=::fmaf(-l20,a01,a12);if(!(d1>ridge*.25f))return false;
     float l21=off/d1,d2=::fmaf(-l21,off,::fmaf(-l20,a02,a22));if(!(d2>ridge*.25f))return false;
     float y0=rhs.r*scale,y1=::fmaf(-l10,y0,rhs.g*scale),y2=::fmaf(-l21,y1,::fmaf(-l20,y0,rhs.b*scale));
-    x.b=y2/d2;x.g=::fmaf(-l21,x.b,y1/d1);x.r=::fmaf(-l20,x.b,::fmaf(-l10,x.g,y0/a00));return std::isfinite(x.r)&&std::isfinite(x.g)&&std::isfinite(x.b);
+    x.b=y2/d2;x.g=::fmaf(-l21,x.b,y1/d1);x.r=::fmaf(-l20,x.b,::fmaf(-l10,x.g,y0/a00));return configured::isfinite(x.r)&&configured::isfinite(x.g)&&configured::isfinite(x.b);
 }
 REG3_HD float raw(float x,float d,float amount,bool active){return active?configured::clip(x+amount*d):x;}
 REG3_HD Point trial(Point x,Step s,float amount){return {raw(x.a,s.d.a,amount,s.mask&A),raw(x.u,s.d.u,amount,s.mask&U),raw(x.bg,s.d.bg,amount,s.mask&BG),{raw(x.c.r,s.d.c.r,amount,s.mask&R),raw(x.c.g,s.d.c.g,amount,s.mask&G),raw(x.c.b,s.d.c.b,amount,s.mask&B)},raw(x.top,s.d.top,amount,s.mask&TOP)};}
-REG3_HD float bound(float v){return std::isfinite(v)?configured::clip(v):.5f;}
+REG3_HD float bound(float v){return configured::isfinite(v)?configured::clip(v):.5f;}
 REG3_HD Point project(Point x){return {bound(x.a),bound(x.u),bound(x.bg),{bound(x.c.r),bound(x.c.g),bound(x.c.b)},bound(x.top)};}
 }

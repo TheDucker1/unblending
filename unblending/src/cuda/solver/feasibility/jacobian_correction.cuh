@@ -65,7 +65,7 @@ template<class T>HD void repair_system(T* gram,const T* rhs,T* step){
     for(int r=0;r<3;++r){for(int s=0;s<3;++s)a[4*r+s]=gram[3*r+s]+(r==s?ridge:T(0));a[4*r+3]=rhs[r];}
     for(int k=0;k<3;++k){int pivot=k;for(int r=k+1;r<3;++r)if(std::abs(a[4*r+k])>std::abs(a[4*pivot+k]))pivot=r;
         if(pivot!=k)for(int s=k;s<4;++s){T v=a[4*k+s];a[4*k+s]=a[4*pivot+s];a[4*pivot+s]=v;}
-        if(!(std::abs(a[4*k+k])>0)||!std::isfinite(a[4*k+k]))return;
+        if(!(std::abs(a[4*k+k])>0)||!configured::isfinite(a[4*k+k]))return;
         for(int r=k+1;r<3;++r){T f=a[4*r+k]/a[4*k+k];for(int s=k;s<4;++s)a[4*r+s]-=f*a[4*k+s];}}
     for(int r=2;r>=0;--r){T v=a[4*r+3];for(int s=r+1;s<3;++s)v-=a[4*r+s]*step[s];step[r]=v/a[4*r+r];}
 }
@@ -82,7 +82,7 @@ template<class T,class Prior,class Model=Layer>struct Repair {
     HD static bool run(const Model* model,const Problem& p,const T* target,View<const T> alpha,const T* bg,
         View<const T> original,View<T> x,View<T> trial,View<T> prefix,View<T> jac,View<T> residual,View<T> lambda,
         T original_energy,T original_norm,unsigned* values=nullptr){
-        int L=p.layers,N=4*L,C=p.constraints(model);if(!std::isfinite(original_norm)||original_norm>T(.01*.01))return false;
+        int L=p.layers,N=4*L,C=p.constraints(model);if(!configured::isfinite(original_norm)||original_norm>T(.01*.01))return false;
         auto cv=[](View<T> v){return View<const T>{v.data,v.stride};};
         for(int k=0;k<N;++k)x[k]=original[k];for(int r=0;r<C;++r)lambda[r]=0;
         if(p.refinement){for(int l=0;l<L;++l){T value=alpha[l];if(value<0||value>1||(p.opaque&&l==0&&value!=1))return false;x[l]=value;}}
@@ -113,13 +113,13 @@ template<class T,class Prior,class Model=Layer>struct Repair {
             for(int backtrack=0;backtrack<12;++backtrack){for(int k=0;k<N;++k)trial[k]=x[k];
                 for(int l=0;l<L;++l){if(p.refinement&&p.smooth&&l==0)continue;T gray=0;if(model[l].gray)for(int r=0;r<3;++r)gray+=jac[L+3*l+r]*step[r]/T(3);
                     for(int r=0;r<3;++r){int k=L+3*l+r;T v=x[k]+amount*(model[l].gray?gray:jac[k]*step[r]);trial[k]=v<0?0:(v>1?1:v);}}
-                T next=evaluate(trial);if(std::isfinite(next)&&next<norm){for(int k=0;k<N;++k)x[k]=trial[k];norm=next;accepted=true;break;}amount*=T(.5);}
+                T next=evaluate(trial);if(configured::isfinite(next)&&next<norm){for(int k=0;k<N;++k)x[k]=trial[k];norm=next;accepted=true;break;}amount*=T(.5);}
             if(!accepted){norm=evaluate(x);break;}
         }
         norm=evaluate(x);T budget=T(.00005)+T(.005)*std::abs(original_energy);
         // This is a candidate correction, not a new objective or tolerance.
         // Never replace an incumbent by a materially more expensive result.
-        return std::isfinite(energy)&&std::isfinite(norm)&&norm<original_norm&&energy<=original_energy+budget;
+        return configured::isfinite(energy)&&configured::isfinite(norm)&&norm<original_norm&&energy<=original_energy+budget;
     }
 };
 #undef REPAIR_NOINLINE

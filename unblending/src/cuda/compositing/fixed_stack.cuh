@@ -2,9 +2,17 @@
 #include "fixed_stack_types.hpp"
 #include "blend_fp64.hpp"
 #include "blend_fp32.hpp"
+#include <cmath>
 #include <type_traits>
 
 namespace configured {
+#if defined(_WIN32) && defined(_MSC_VER) && defined(__CUDACC__)
+// CUDA provides device overloads in the global namespace with MSVC.
+using ::isfinite;
+#else
+using std::isfinite;
+#endif
+
 template<class T,int Mode> HD inline T blend(T s,T d) {
     if constexpr(std::is_same_v<T,float>)return firstpass32::blend(s,d,static_cast<firstpass32::BlendMode>(Mode));
     else return firstpass::blend(s,d,static_cast<firstpass::BlendMode>(Mode));

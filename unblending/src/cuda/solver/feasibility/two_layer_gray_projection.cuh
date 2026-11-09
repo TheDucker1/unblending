@@ -48,7 +48,7 @@ template<class T,class Model>struct TwoLayerGraySeed {
     HD static bool fixed_alpha(const Model* model,Problem p,const T* target,View<const T> alpha,View<T> x,T d,T a,T tolerance){
         if(!(d>=0&&d<=1&&a>=0&&a<=1)||(p.opaque&&d!=1))return false;
         const auto& m=model[1];T A=T(m.X)*a*d+T(m.Y)*a*(1-d)+T(m.Z)*d*(1-a),den=A>T(1e-12)?A:T(1),u=a*d/den,v=T(m.Y)*a*(1-d)/den,w=T(m.Z)*d*(1-a)/den;
-        if(!(u>=0&&w>=0&&std::isfinite(u)&&std::isfinite(v)&&std::isfinite(w)))return false;
+        if(!(u>=0&&w>=0&&configured::isfinite(u)&&configured::isfinite(v)&&configured::isfinite(w)))return false;
         T minimum=target[0],maximum=target[0];for(int r=1;r<3;++r){if(target[r]<minimum)minimum=target[r];if(target[r]>maximum)maximum=target[r];}
         T preferred=(T(m.mean[0])+T(m.mean[1])+T(m.mean[2]))/3;
         for(int region=0;region<(m.mode==8?2:1);++region){
@@ -75,7 +75,7 @@ template<class T,class Model>struct TwoLayerGraySeed {
     }
     HD static GRAY_SEED_OUTLINED bool run(const Model* model,Problem p,const T* target,View<const T> alpha,View<T> x,T tolerance){
         if(p.layers!=2||model[0].gray||(p.refinement&&p.smooth))return false;
-        for(int r=0;r<3;++r)if(!std::isfinite(target[r]))return false;
+        for(int r=0;r<3;++r)if(!configured::isfinite(target[r]))return false;
         if(p.refinement)return fixed_alpha(model,p,target,alpha,x,alpha[0],alpha[1],tolerance);
         T X=T(model[1].X),Y=T(model[1].Y),Z=T(model[1].Z);
         for(int candidate=0;candidate<(p.opaque?3:8);++candidate){T d=0,a=0,den;

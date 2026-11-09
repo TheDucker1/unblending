@@ -60,7 +60,7 @@ template<class T>struct Inverse {
                 out.add(d,d);
             }
         }else segment(out,mode,a,s,0,1,target);
-        return out.nearest(warm,result)&&std::isfinite(result);
+        return out.nearest(warm,result)&&configured::isfinite(result);
     }
     HD static bool source(int mode,T a,T d,T target,T warm,T& value){
         if(!(a>0))return false;
@@ -85,7 +85,7 @@ template<class T>struct Inverse {
             auto inverse=range_union::sources(range_refinement::Nearest<T,2>{warm},mode,d,target,a,T(0),T(1)-a);
             return inverse.nearest(warm,value);
         }
-        if(value<-eps||value>1+eps||!std::isfinite(value))return false;
+        if(value<-eps||value>1+eps||!configured::isfinite(value))return false;
         value=configured::clip(value);return true;
     }
     template<class Model>HD static bool eligible(const Model* m,general::Problem p,general::View<const T> x){
@@ -117,7 +117,7 @@ template<class T>struct Inverse {
             else{
                 if(!source(m[anchor].mode,x[anchor],prefix[4*(anchor-1)+r],desired,x[L+3*anchor+r],color))return false;
             }
-            if(!(color>=0&&color<=1&&std::isfinite(color)))return false;
+            if(!(color>=0&&color<=1&&configured::isfinite(color)))return false;
             x[L+3*anchor+r]=color;
         }
         return true;

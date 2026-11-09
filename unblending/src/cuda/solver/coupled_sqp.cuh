@@ -52,7 +52,7 @@ template<class T>struct Solver {
             g[l]=p.refinement?T(0):distance;aB[l]=p.refinement?T(0):T(1)/(1+std::abs(distance));
             for(int r=0;r<3;++r)g[L+3*l+r]=alpha*gradient[r];
             bool valid=true;
-            for(int k=0;k<6;++k){B[6*l+k]=model[l].gray?gray/scale:T(.5)*covariance[k]/scale;valid&=std::isfinite(B[6*l+k]);}
+            for(int k=0;k<6;++k){B[6*l+k]=model[l].gray?gray/scale:T(.5)*covariance[k]/scale;valid&=configured::isfinite(B[6*l+k]);}
             // Numerical fallback is a positive isotropic metric, restricted to
             // the gray direction if requested; the actual prior is unchanged.
             if(!valid){for(int k=0;k<6;++k)B[6*l+k]=model[l].gray?T(1)/T(3):T(0);if(!model[l].gray)B[6*l]=B[6*l+3]=B[6*l+5]=1;}
@@ -60,7 +60,7 @@ template<class T>struct Solver {
         }
         if(p.minimum)for(int l=0;l<L;++l)g[l]+=T(.01);
         if(p.sparsity){if(!(square>0))return false;for(int l=0;l<L;++l)g[l]+=T(p.sparsity_weight)*(square-2*point[l]*sum)/(square*square);}
-        for(int k=0;k<N;++k)if(!std::isfinite(g[k]))return false;
+        for(int k=0;k<N;++k)if(!configured::isfinite(g[k]))return false;
         return true;
     }
 
@@ -84,7 +84,7 @@ template<class T>struct Solver {
             // improve invisible colors. A zero dual handles that flat case.
             T trace=0;for(int r=0;r<rows;++r)trace+=gram[4*r+r];
             if(trace>0&&!R::solve(rows,gram,rhs,dual))return false;
-            if(!std::isfinite(trace)||trace<0)return false;
+            if(!configured::isfinite(trace)||trace<0)return false;
             for(int l=0;l<L;++l){
                 T value=g[l];for(int r=0;r<rows;++r)value+=J[r*N+l]*dual[r];step[l]=-aB[l]*free[l]*value;
                 T color[3];for(int r=0;r<3;++r)color[r]=g[L+3*l+r]+J[r*N+L+3*l+r]*dual[r];
@@ -122,13 +122,13 @@ template<class T>struct Solver {
         }
         if(!(norm<=tolerance*tolerance*T(.0025))){probe::hit(probe::InitialRestore);if constexpr(std::is_same_v<T,float> && host_reduced_math){if(register_three::eligible(model,p))register_three::scalar_initial(model,p,wanted,point,tolerance);else R::run(model,p,wanted,alpha,bg,initial,point,memory,tolerance);}else R::run(model,p,wanted,alpha,bg,initial,point,memory,tolerance);norm=R::norm(model,p,wanted,alpha,cv(point));}
         if(!(norm<=tolerance*tolerance))return 3;
-        probe::hit(probe::Energy);T best=P::energy(model,p,cv(point));++values;if(!std::isfinite(best))return 2;
+        probe::hit(probe::Energy);T best=P::energy(model,p,cv(point));++values;if(!configured::isfinite(best))return 2;
         auto candidate=s.at(9*s.N),step=s.at(10*s.N);
         #pragma unroll 1
         for(int iteration=0;iteration<rounds;++iteration){probe::hit(probe::OuterIteration);
             bool ok;if constexpr(std::is_same_v<T,float> && host_reduced_math){if(register_three::eligible(model,p)){register_three::Point delta;register_three::V anchor,t{wanted[0],wanted[1],wanted[2]};ok=register_three::proposal(model,p,register_three::load(point),t,delta,anchor,model[1].mode,model[2].mode);if(ok){auto out=s.at(10*s.N);register_three::store(out,delta);out[0]=0;auto j=s.at(12*s.N);j[6]=anchor.r;j[s.N+7]=anchor.g;j[2*s.N+8]=anchor.b;}}else ok=s.gradient_metric(cv(point))&&s.direction(cv(point),wanted);}else ok=s.gradient_metric(cv(point))&&s.direction(cv(point),wanted);if(!ok)break;
             T limit=1,magnitude=0;
-            for(int k=0;k<s.N;++k){T d=step[k];if(!std::isfinite(d))return 2;T a=std::abs(d);if(a>magnitude)magnitude=a;if(d>0){T t=(1-point[k])/d;if(t<limit)limit=t;}else if(d<0){T t=-point[k]/d;if(t<limit)limit=t;}}
+            for(int k=0;k<s.N;++k){T d=step[k];if(!configured::isfinite(d))return 2;T a=std::abs(d);if(a>magnitude)magnitude=a;if(d>0){T t=(1-point[k])/d;if(t<limit)limit=t;}else if(d<0){T t=-point[k]/d;if(t<limit)limit=t;}}
             if(magnitude<=T(1e-10)||!(limit>0))break;
             if(magnitude*limit>T(.25))limit=T(.25)/magnitude;
             bool moved=false;
@@ -153,7 +153,7 @@ template<class T>struct Solver {
                 }
 }
                 if(next_norm<=tolerance*tolerance){probe::hit(probe::Energy);T energy;if constexpr(std::is_same_v<T,float> && host_reduced_math){energy=register_three::eligible(model,p)?register_three::energy(model,p,register_three::load(candidate)):P::energy(model,p,cv(candidate));}else energy=P::energy(model,p,cv(candidate));++values;
-                    if(std::isfinite(energy)&&energy<best){for(int k=0;k<s.N;++k)point[k]=candidate[k];best=energy;moved=true;++accepted;probe::hit(probe::Accepted);break;}}
+                    if(configured::isfinite(energy)&&energy<best){for(int k=0;k<s.N;++k)point[k]=candidate[k];best=energy;moved=true;++accepted;probe::hit(probe::Accepted);break;}}
                 limit*=T(.5);
             }
             if(!moved)break;

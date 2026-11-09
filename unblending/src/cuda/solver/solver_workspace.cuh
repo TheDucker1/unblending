@@ -17,13 +17,13 @@ using Prior=general::PolynomialPrior;
 // gray equalities, bounds and the requested fixed-input contracts.
 HD inline double constraint_norm(const Model* model,general::Problem p,View<const double> target,View<const double> alpha,View<const double> bg,View<const double> x){
     int L=p.layers;double rgb[3],da=x[0],error=0;if(p.opaque&&x[0]!=1)return INFINITY;
-    for(int l=0;l<L;++l){double a=x[l];if(!std::isfinite(a)||a<0||a>1)return INFINITY;if(p.refinement){double d=a-alpha[l];error+=d*d;if(p.fixed_alpha&&d!=0)return INFINITY;}
-        double norm=0;for(int r=0;r<3;++r){double c=x[L+3*l+r];if(!std::isfinite(c)||c<0||c>1)return INFINITY;norm+=c*c;if(p.refinement&&p.smooth&&l==0&&c!=bg[r])return INFINITY;}
+    for(int l=0;l<L;++l){double a=x[l];if(!configured::isfinite(a)||a<0||a>1)return INFINITY;if(p.refinement){double d=a-alpha[l];error+=d*d;if(p.fixed_alpha&&d!=0)return INFINITY;}
+        double norm=0;for(int r=0;r<3;++r){double c=x[L+3*l+r];if(!configured::isfinite(c)||c<0||c>1)return INFINITY;norm+=c*c;if(p.refinement&&p.smooth&&l==0&&c!=bg[r])return INFINITY;}
         if(model[l].gray){norm=std::sqrt(norm);for(int r=0;r<3;++r){double d=1.7320508075688772935*x[L+3*l+r]-norm;error+=d*d;}}}
     for(int r=0;r<3;++r)rgb[r]=x[L+r];
     for(int l=1;l<L;++l){const auto& m=model[l];double a=x[l],next=double(m.X)*a*da+double(m.Y)*a*(1-da)+double(m.Z)*da*(1-a);for(int r=0;r<3;++r)rgb[r]=range_union::native_color(m,a,da,next,x[L+3*l+r],rgb[r]);da=next;}
     for(int r=0;r<3;++r){double d=rgb[r]-target[r];error+=d*d;}if(!p.refinement){double d=da-1;error+=d*d;}
-    return std::isfinite(error)?error:INFINITY;
+    return configured::isfinite(error)?error:INFINITY;
 }
 
 __global__ void cast(size_t count,const double* input,float* output){for(size_t k=size_t(blockIdx.x)*blockDim.x+threadIdx.x;k<count;k+=size_t(gridDim.x)*blockDim.x)output[k]=float(input[k]);}

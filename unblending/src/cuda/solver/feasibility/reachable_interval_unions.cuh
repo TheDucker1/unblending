@@ -39,7 +39,7 @@ template<class T>struct Prefix {
     HD T high(int k)const{return work[offset(k)+1];}
     HD void set(int k,T low,T high){work[offset(k)]=low;work[offset(k)+1]=high;}
     HD bool add(T low,T high){
-        if(!(std::isfinite(low)&&std::isfinite(high)&&low<=high))return false;
+        if(!(configured::isfinite(low)&&configured::isfinite(high)&&low<=high))return false;
         int n=count(),first=0;while(first<n&&this->high(first)<low)++first;
         int end=first;while(end<n&&this->low(end)<=high){if(this->low(end)<low)low=this->low(end);if(this->high(end)>high)high=this->high(end);++end;}
         if(end==first){if(n==l+1){count(-1);return false;}for(int k=n;k>first;--k)set(k,this->low(k-1),this->high(k-1));set(first,low,high);count(n+1);}
@@ -58,7 +58,7 @@ template<class T>HD bool image(int mode,T low,T high,T u,T v,T w,T& out_low,T& o
         // On either side of its destination epsilon jump, G is continuous
         // and nondecreasing in both variables, even for d outside [0,1].
         out_low=range_refinement::apply(mode,T(0),low,u,v,w);out_high=range_refinement::apply(mode,T(1),high,u,v,w);
-        return std::isfinite(out_low)&&std::isfinite(out_high)&&out_low<=out_high;
+        return configured::isfinite(out_low)&&configured::isfinite(out_high)&&out_low<=out_high;
     }
     if(low<0||high>1){
         // Add/Exclusion may leave the unit cube. Never clamp a prefix: the
@@ -78,7 +78,7 @@ template<class T>HD bool image(int mode,T low,T high,T u,T v,T w,T& out_low,T& o
         if(mode==3)probe(T(.5));
         if(mode==4||mode==5||mode==10){probe(T(0));probe(T(1));}
         if(mode==9&&u>0)probe(-w/(2*u));
-        return std::isfinite(out_low)&&std::isfinite(out_high)&&out_low<=out_high;
+        return configured::isfinite(out_low)&&configured::isfinite(out_high)&&out_low<=out_high;
     }
     return range_refinement::reachable(mode,low,high,u,v,w,out_low,out_high);
 }
@@ -136,7 +136,7 @@ template<class T,class Accumulator>HD void soft_destinations_wide(Accumulator& o
     // <=2 quadratic roots, one affine root and one monotone cubic root.
     // Six sorted endpoints give at most five intervals; no layer-sized state.
     T cuts[6];int count=2;cuts[0]=low;cuts[1]=high;
-    auto insert=[&](T x){if(!std::isfinite(x)||x<=low||x>=high)return;int j=count;while(j>0&&cuts[j-1]>x){cuts[j]=cuts[j-1];--j;}cuts[j]=x;++count;};
+    auto insert=[&](T x){if(!configured::isfinite(x)||x<=low||x>=high)return;int j=count;while(j>0&&cuts[j-1]>x){cuts[j]=cuts[j-1];--j;}cuts[j]=x;++count;};
     if(u>0){T discriminant=w*w+4*u*target;
         T eps=T(64)*std::numeric_limits<T>::epsilon()*(T(1)+w*w+std::abs(4*u*target));
         if(discriminant>=-eps){if(discriminant<0)discriminant=0;T q=-T(.5)*(w+configured::root(discriminant));if(q!=0){insert(q/u);insert(-target/q);}else insert(T(0));}}
@@ -200,7 +200,7 @@ template<class T,class Accumulator>HD Accumulator sources(Accumulator out,int mo
     T value;
     if(mode==6){T y=target-w*d,c=y-u*d;if(v==0)value=y!=0?T(1)-solver_divide(u*d,y):T(0);else{T b=v+y,root=configured::root((v-y)*(v-y)+4*v*u*d),den=b+root;value=den!=0?solver_divide(2*c,den):T(0);}}
     else {T y=target-u-w*d,c=u*(T(1)-d);if(v==0)value=y!=0?solver_divide(-c,y):T(1);else{T root=configured::root(y*y+4*v*c);value=y>0?solver_divide(y+root,2*v):(root-y!=0?solver_divide(2*c,root-y):T(0));}}
-    value=value<left?left:(value>right?right:value);if(std::isfinite(value))out.add(value,value);return out;
+    value=value<left?left:(value>right?right:value);if(configured::isfinite(value))out.add(value,value);return out;
 }
 
 template<class T,class Input=T,class Output=T,class Model=general::Layer>HD int pixel(const Model* models,general::Problem p,
@@ -208,16 +208,16 @@ template<class T,class Input=T,class Output=T,class Model=general::Layer>HD int 
     View<Output> output,View<T> work,T tolerance,T anchor=T(0),bool reuse=false,T limit=T(INFINITY)){
     int L=p.layers;bool so=range_refinement::opaque_source_over(models,p)&&alpha[0]==1;
     auto warm=[&](int l,int r){T x=T(initial[L+3*l+r]);if(anchor!=0)x+=anchor*(T(models[l].mean[r])-x);return configured::clip(x);};
-    for(int l=0;l<L;++l){Input a=alpha[l];if(!std::isfinite(a)||a<0||a>1||(p.opaque&&l==0&&a!=1))return 4;output[l]=a;for(int r=0;r<3;++r)output[L+3*l+r]=warm(l,r);if(models[l].gray)return 8;}
-    T current[3];for(int r=0;r<3;++r){Input bg=background[r];if(!std::isfinite(bg)||bg<0||bg>1)return 4;current[r]=p.smooth?T(bg):warm(0,r);if(p.smooth)output[L+r]=bg;
+    for(int l=0;l<L;++l){Input a=alpha[l];if(!configured::isfinite(a)||a<0||a>1||(p.opaque&&l==0&&a!=1))return 4;output[l]=a;for(int r=0;r<3;++r)output[L+3*l+r]=warm(l,r);if(models[l].gray)return 8;}
+    T current[3];for(int r=0;r<3;++r){Input bg=background[r];if(!configured::isfinite(bg)||bg<0||bg>1)return 4;current[r]=p.smooth?T(bg):warm(0,r);if(p.smooth)output[L+r]=bg;
         if(!reuse){Prefix<T> prefix{work,L,0,r};prefix.count(0);if(!prefix.add(p.smooth?T(bg):T(0),p.smooth?T(bg):T(1)))return 9;work[r]=prefix.low(0);work[3*L+r]=prefix.high(0);}work[6*L+r]=current[r];}
     T da=T(alpha[0]);if(!reuse)work[9*L]=da;
     for(int l=1;l<L;++l){T next,u,v,w;if(!range_refinement::weights(models[l],T(alpha[l]),da,next,u,v,w,so))return 8;if((models[l].mode==6||models[l].mode==7)&&(u<0||v<0||w<0))return 8;
         if(!reuse)work[9*L+l]=next;
-        for(int r=0;r<3;++r){if(!reuse){Prefix<T> prefix{work,L,l,r},previous{work,L,l-1,r};if(!advance(previous,prefix,models[l].mode,u,v,w,limit))return prefix.count()<0?9:(std::isfinite(limit)&&prefix.count()==0?6:8);work[3*l+r]=prefix.low(0);work[3*L+3*l+r]=prefix.high(prefix.count()-1);}
+        for(int r=0;r<3;++r){if(!reuse){Prefix<T> prefix{work,L,l,r},previous{work,L,l-1,r};if(!advance(previous,prefix,models[l].mode,u,v,w,limit))return prefix.count()<0?9:(configured::isfinite(limit)&&prefix.count()==0?6:8);work[3*l+r]=prefix.low(0);work[3*L+3*l+r]=prefix.high(prefix.count()-1);}
             current[r]=native_color(models[l],T(alpha[l]),da,next,warm(l,r),current[r]);work[6*L+3*l+r]=current[r];}da=next;}
     T goal[3],desired[3];bool projected=false;
-    for(int r=0;r<3;++r){T wanted=T(target[r]);if(!std::isfinite(wanted))return 4;Prefix<T> last{work,L,L-1,r};if(!last.nearest(wanted,goal[r]))return 9;desired[r]=goal[r];projected|=goal[r]!=wanted;}
+    for(int r=0;r<3;++r){T wanted=T(target[r]);if(!configured::isfinite(wanted))return 4;Prefix<T> last{work,L,L-1,r};if(!last.nearest(wanted,goal[r]))return 9;desired[r]=goal[r];projected|=goal[r]!=wanted;}
     unsigned active=7;
     for(int l=L-1;l>0&&active;--l){T next,u,v,w;if(!range_refinement::weights(models[l],T(alpha[l]),so?T(1):work[9*L+l-1],next,u,v,w,so))return 8;
         for(int r=0;r<3;++r){if(!(active&(1u<<r)))continue;T destination=work[6*L+3*(l-1)+r],color;
@@ -229,7 +229,7 @@ template<class T,class Input=T,class Output=T,class Model=general::Layer>HD int 
             // its reachable set; if no unit destination is feasible, retain
             // the closest outside value. Do not short-circuit through the
             // ill-conditioned warm source inverse in that case.
-            T preferred=std::isfinite(destination)?configured::clip(destination):T(.5);bool conditioned=preferred!=destination;
+            T preferred=configured::isfinite(destination)?configured::clip(destination):T(.5);bool conditioned=preferred!=destination;
             if(!conditioned){auto warm_sources=sources(range_refinement::Nearest<T,2>{warm(l,r)},models[l].mode,destination,desired[r],u,v,w);
                 if(warm_sources.nearest(warm(l,r),color)){output[L+3*l+r]=configured::clip(color);active&=~(1u<<r);continue;}}
             InteriorNearest<T> nearest(preferred,models[l].mode,l);Prefix<T> previous{work,L,l-1,r};
@@ -241,15 +241,15 @@ template<class T,class Input=T,class Output=T,class Model=general::Layer>HD int 
     if(!p.smooth)for(int r=0;r<3;++r)if(active&(1u<<r))output[L+r]=configured::clip(desired[r]);
     for(int r=0;r<3;++r)current[r]=T(output[L+r]);da=T(alpha[0]);
     for(int l=1;l<L;++l){T next,u,v,w;if(!range_refinement::weights(models[l],T(alpha[l]),da,next,u,v,w,so))return 8;for(int r=0;r<3;++r)current[r]=native_color(models[l],T(alpha[l]),da,next,T(output[L+3*l+r]),current[r]);da=next;}
-    T error=0;for(int r=0;r<3;++r){T delta=current[r]-goal[r];error+=delta*delta;}if(!std::isfinite(error)||error>tolerance*tolerance)return 3;return projected?5:0;
+    T error=0;for(int r=0;r<3;++r){T delta=current[r]-goal[r];error+=delta*delta;}if(!configured::isfinite(error)||error>tolerance*tolerance)return 3;return projected?5:0;
 }
 template<class T,class Model>HD int improve(const Model* model,general::Problem p,View<const T> initial,View<const T> target,View<const T> alpha,View<const T> bg,View<T> point,View<T> work,T tolerance,T anchor,int rounds,int& accepted,T limit=T(INFINITY)){
     int L=p.layers;accepted=0;int status=pixel(model,p,initial,target,alpha,bg,point,work,tolerance,anchor,false,limit);if(status!=0&&status!=5)return status;if(rounds==0)return status;
     T goal[3];for(int r=0;r<3;++r){Prefix<T> last{work,L,L-1,r};if(!last.nearest(target[r],goal[r]))return 9;}
-    T best=range_refinement::gaussian_energy(model,p,point);if(!std::isfinite(best))return 2;View<T> trial{work.data+size_t(22*L)*work.stride,work.stride};
+    T best=range_refinement::gaussian_energy(model,p,point);if(!configured::isfinite(best))return 2;View<T> trial{work.data+size_t(22*L)*work.stride,work.stride};
     for(int it=0;it<rounds;++it){if(!range_refinement::proposal_views(model,p,View<const T>{goal,1},point,work))break;
         int next=pixel(model,p,View<const T>{work.data+size_t(18*L)*work.stride,work.stride},target,alpha,bg,trial,work,tolerance,T(0),true,limit);T cost=range_refinement::gaussian_energy(model,p,trial);
-        if((next==0||next==5)&&std::isfinite(cost)&&cost<best){for(int k=0;k<4*L;++k)point[k]=trial[k];best=cost;status=next;++accepted;}else break;
+        if((next==0||next==5)&&configured::isfinite(cost)&&cost<best){for(int k=0;k<4*L;++k)point[k]=trial[k];best=cost;status=next;++accepted;}else break;
     }
     return status;
 }

@@ -20,7 +20,7 @@ template<class T>HD bool face(const Model& m,const T* linear,int mask,const T* b
         for(int s=0;s<3;++s)if(!(mask&(1<<s)))rhs[r]+=T(m.inverse[3*r+s])*(bounds[s]-T(m.mean[s]));}
     T tolerance=T(32)*std::numeric_limits<T>::epsilon();
     for(int r=0;r<3;++r)if(mask&(1<<r)){T value=T(m.mean[r]);for(int s=0;s<3;++s)value-=T(m.face_inverse[mask][3*r+s])*rhs[s];
-        if(!std::isfinite(value)||value<-tolerance||value>T(1)+tolerance)return false;color[r]=configured::clip(value);}
+        if(!configured::isfinite(value)||value<-tolerance||value>T(1)+tolerance)return false;color[r]=configured::clip(value);}
     for(int r=0;r<3;++r)if(!((mask|force)&(1<<r))){T g=gradient(m,color,linear,r),scale=std::abs(linear[r]);
         // Backward-error scale for S*(color-mean)+linear. No additive1 in
         // energy units: uniformly rescaling the QP must not change its face.
@@ -56,7 +56,7 @@ template<class T>HD bool interval_face(const Model& m,const T* lower,const T* up
     T rhs[3]{};for(int r=0;r<3;++r){color[r]=bounds[r];for(int s=0;s<3;++s)if(!(mask&(1<<s)))rhs[r]+=T(m.inverse[3*r+s])*(bounds[s]-T(m.mean[s]));}
     T tolerance=T(32)*std::numeric_limits<T>::epsilon();
     for(int r=0;r<3;++r)if(mask&(1<<r)){T value=T(m.mean[r]);for(int s=0;s<3;++s)value-=T(m.face_inverse[mask][3*r+s])*rhs[s];
-        if(!std::isfinite(value)||value<lower[r]-tolerance||value>upper[r]+tolerance)return false;color[r]=value<lower[r]?lower[r]:(value>upper[r]?upper[r]:value);}
+        if(!configured::isfinite(value)||value<lower[r]-tolerance||value>upper[r]+tolerance)return false;color[r]=value<lower[r]?lower[r]:(value>upper[r]?upper[r]:value);}
     const T zero[3]{};
     for(int r=0;r<3;++r)if(!(mask&(1<<r))&&lower[r]<upper[r]){T g=gradient(m,color,zero,r),scale=0;
         for(int s=0;s<3;++s)scale+=std::abs(T(m.inverse[3*r+s]))*(T(1)+std::abs(color[s])+std::abs(T(m.mean[s])));

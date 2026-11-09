@@ -52,7 +52,7 @@ template<class T>struct Channel {T color,destination;int kind;};
 // Share substantial inverse code, but pass no point/prefix array addresses.
 // The POD result lets the storage-owning caller retain its arrays in registers.
 template<class T>HD RF_NOINLINE Channel<T> inverse_channel(T source,T destination,T desired,T u,int mode,int layer){
-    T v=0,w=1-u,color;T preferred=std::isfinite(destination)?configured::clip(destination):T(.5);bool conditioned=preferred!=destination;
+    T v=0,w=1-u,color;T preferred=configured::isfinite(destination)?configured::clip(destination):T(.5);bool conditioned=preferred!=destination;
     if(!conditioned){auto inverse=range_union::sources(range_refinement::Nearest<T,2>{source},mode,destination,desired,u,v,w);if(inverse.nearest(source,color))return {configured::clip(color),destination,0};}
     range_union::InteriorNearest<T> nearest(preferred,mode,layer);range_union::destinations(nearest,mode,T(0),T(1),desired,u,v,w);
     if(!nearest.nearest(destination,destination))return {source,destination,2};auto inverse=range_union::sources(range_refinement::Nearest<T,2>{source},mode,destination,desired,u,v,w);
@@ -62,11 +62,11 @@ template<class T>HD RF_NOINLINE Channel<T> inverse_channel(T source,T destinatio
 // Same warm-prefix / source-first / nearest-destination feasible decoder as
 // reachable_cube::pixel. Prefixes are RGB only; every prefix alpha is one.
 template<class T,int L> RF_INLINE int decode(const Model<T>* model,const Point<T,L>& warm,const T* target,const T* bg,Point<T,L>& out,T tolerance) {
-    bool valid=true;each<0,L>([&](auto l) RF_LAMBDA_INLINE{T a=warm.a[l];valid=valid&&std::isfinite(a)&&a>=0&&a<=1&&(l!=0||a==1);out.a[l]=a;each<0,3>([&](auto r) RF_LAMBDA_INLINE{out.c[l][r]=configured::clip(warm.c[l][r]);});});
+    bool valid=true;each<0,L>([&](auto l) RF_LAMBDA_INLINE{T a=warm.a[l];valid=valid&&configured::isfinite(a)&&a>=0&&a<=1&&(l!=0||a==1);out.a[l]=a;each<0,3>([&](auto r) RF_LAMBDA_INLINE{out.c[l][r]=configured::clip(warm.c[l][r]);});});
     if(!valid)return 4;T prefix[L][3],current[3];
-    each<0,3>([&](auto r) RF_LAMBDA_INLINE{valid=valid&&std::isfinite(bg[r])&&bg[r]>=0&&bg[r]<=1;current[r]=configured::clip(warm.c[0][r]);prefix[0][r]=current[r];});if(!valid)return 4;
+    each<0,3>([&](auto r) RF_LAMBDA_INLINE{valid=valid&&configured::isfinite(bg[r])&&bg[r]>=0&&bg[r]<=1;current[r]=configured::clip(warm.c[0][r]);prefix[0][r]=current[r];});if(!valid)return 4;
     each<1,L>([&](auto l) RF_LAMBDA_INLINE{each<0,3>([&](auto r) RF_LAMBDA_INLINE{current[r]=reachable_cube::over(model[l],warm.a[l],configured::clip(warm.c[l][r]),current[r]);prefix[l][r]=current[r];});});
-    T goal[3],desired[3];bool projected=false;each<0,3>([&](auto r) RF_LAMBDA_INLINE{valid=valid&&std::isfinite(target[r]);goal[r]=configured::clip(target[r]);desired[r]=goal[r];projected|=goal[r]!=target[r];});if(!valid)return 4;
+    T goal[3],desired[3];bool projected=false;each<0,3>([&](auto r) RF_LAMBDA_INLINE{valid=valid&&configured::isfinite(target[r]);goal[r]=configured::clip(target[r]);desired[r]=goal[r];projected|=goal[r]!=target[r];});if(!valid)return 4;
     unsigned active=7;int code=0;
     each<0,L-1>([&](auto rev) RF_LAMBDA_INLINE{constexpr int l=L-1-rev;
         if(!active||code)return;T u=warm.a[l];
@@ -78,7 +78,7 @@ template<class T,int L> RF_INLINE int decode(const Model<T>* model,const Point<T
     });if(code)return code;
     each<0,3>([&](auto r) RF_LAMBDA_INLINE{if(active&(1u<<r))out.c[0][r]=configured::clip(desired[r]);current[r]=out.c[0][r];});
     each<1,L>([&](auto l) RF_LAMBDA_INLINE{each<0,3>([&](auto r) RF_LAMBDA_INLINE{current[r]=reachable_cube::over(model[l],out.a[l],out.c[l][r],current[r]);});});
-    T error=0;each<0,3>([&](auto r) RF_LAMBDA_INLINE{T d=current[r]-goal[r];error+=d*d;});if(!std::isfinite(error)||error>tolerance*tolerance)return 3;return projected?5:0;
+    T error=0;each<0,3>([&](auto r) RF_LAMBDA_INLINE{T d=current[r]-goal[r];error+=d*d;});if(!configured::isfinite(error)||error>tolerance*tolerance)return 3;return projected?5:0;
 }
 
 template<bool Colors,class T,int L> RF_INLINE bool proposal(const Model<T>* model,general::Problem p,const Point<T,L>& point,const T* target,T (*preferred)[3],T* alpha_gradient=nullptr) {
@@ -91,11 +91,11 @@ template<bool Colors,class T,int L> RF_INLINE bool proposal(const Model<T>* mode
         T gradient[3],j[3],normalized[3];gaussian<true>(model[l],point.c[l],gradient);
         each<0,3>([&](auto r) RF_LAMBDA_INLINE{j[r]=jac[l][r];T move=0;each<0,3>([&](auto s) RF_LAMBDA_INLINE{move+=T(.5)*model[l].covariance[indices[3*r+s]]*gradient[s];});if constexpr(Colors)preferred[l][r]=point.c[l][r]-move;rhs[r]-=j[r]*move;normalized[r]=j[r]/(T(2)*a);jac[l][r]=normalized[r];});
         each<0,6>([&](auto k) RF_LAMBDA_INLINE{K[k]+=j[row[k]]*model[l].covariance[k]*normalized[col[k]];});
-    });T trace=K[0]+K[3]+K[5];if(degenerate||!std::isfinite(trace)||trace<0)return false;
+    });T trace=K[0]+K[3]+K[5];if(degenerate||!configured::isfinite(trace)||trace<0)return false;
     if(trace>0){if(!normal_refinement::solve3(K,trace*T(sizeof(T)==4?1e-6:1e-12),rhs,dual))return false;}else each<0,3>([&](auto r) RF_LAMBDA_INLINE{dual[r]=0;});
     bool finite=true;each<0,L>([&](auto l) RF_LAMBDA_INLINE{if(point.a[l]==0)return;T gradient[3];if constexpr(!Colors)gaussian<true>(model[l],point.c[l],gradient);
         each<0,3>([&](auto r) RF_LAMBDA_INLINE{T predicted;if constexpr(Colors)predicted=preferred[l][r];else{T move=0;each<0,3>([&](auto s) RF_LAMBDA_INLINE{move+=T(.5)*model[l].covariance[indices[3*r+s]]*gradient[s];});predicted=point.c[l][r]-move;}
-            each<0,3>([&](auto s) RF_LAMBDA_INLINE{predicted-=model[l].covariance[indices[3*r+s]]*jac[l][s]*dual[s];});finite=finite&&std::isfinite(predicted);if constexpr(Colors)preferred[l][r]=predicted;
+            each<0,3>([&](auto s) RF_LAMBDA_INLINE{predicted-=model[l].covariance[indices[3*r+s]]*jac[l][s]*dual[s];});finite=finite&&configured::isfinite(predicted);if constexpr(Colors)preferred[l][r]=predicted;
         });
     });if(!finite)return false;
     if constexpr(!Colors){T sum=0,square=0;each<0,L>([&](auto l) RF_LAMBDA_INLINE{alpha_gradient[l]=gaussian<false>(model[l],point.c[l])+(p.minimum?T(.01):T(0));sum+=point.a[l];square+=point.a[l]*point.a[l];});
@@ -105,11 +105,11 @@ template<bool Colors,class T,int L> RF_INLINE bool proposal(const Model<T>* mode
 }
 
 template<class T,int L> RF_INLINE int improve(const Model<T>* model,general::Problem p,Point<T,L>& point,const T* target,const T* bg,T tolerance,int rounds,int& accepted,int& values) {
-    accepted=values=0;int status=decode(model,point,target,bg,point,tolerance);if(status!=0&&status!=5)return status;T best=energy(model,p,point);++values;if(!std::isfinite(best))return 2;if(rounds==0)return status;
+    accepted=values=0;int status=decode(model,point,target,bg,point,tolerance);if(status!=0&&status!=5)return status;T best=energy(model,p,point);++values;if(!configured::isfinite(best))return 2;if(rounds==0)return status;
     T goal[3];each<0,3>([&](auto r) RF_LAMBDA_INLINE{goal[r]=configured::clip(target[r]);});
     for(int iteration=0;iteration<rounds;++iteration){T preferred[L][3];if(!proposal<true>(model,p,point,goal,preferred))break;bool moved=false;
         for(int attempt=0;attempt<5;++attempt){Point<T,L> trial;each<0,L>([&](auto l) RF_LAMBDA_INLINE{trial.a[l]=point.a[l];each<0,3>([&](auto r) RF_LAMBDA_INLINE{preferred[l][r]=point.c[l][r]+T(.5)*(preferred[l][r]-point.c[l][r]);trial.c[l][r]=preferred[l][r];});});
-            int code=decode(model,trial,target,bg,trial,tolerance);T cost=energy(model,p,trial);++values;if((code==0||code==5)&&std::isfinite(cost)&&cost<best){copy(trial,point);best=cost;status=code;++accepted;moved=true;break;}}
+            int code=decode(model,trial,target,bg,trial,tolerance);T cost=energy(model,p,trial);++values;if((code==0||code==5)&&configured::isfinite(cost)&&cost<best){copy(trial,point);best=cost;status=code;++accepted;moved=true;break;}}
         if(!moved)break;
     }return status;
 }
@@ -117,10 +117,10 @@ template<class T,int L> RF_INLINE int first(const Model<T>* model,general::Probl
     p.smooth=false;p.fixed_alpha=false;accepted=values=0;each<0,L>([&](auto l) RF_LAMBDA_INLINE{point.a[l]=configured::clip(point.a[l]);each<0,3>([&](auto r) RF_LAMBDA_INLINE{point.c[l][r]=configured::clip(point.c[l][r]);});});point.a[0]=1;
     int a=0,v=0;int status=improve(model,p,point,target,bg,tolerance,0,a,v);values=v;if(status!=0&&status!=5)return status;T best=energy(model,p,point);++values;
     for(int outer=0;outer<rounds;++outer){bool color_moved=false;
-        {Point<T,L> candidate;copy(point,candidate);int code=improve(model,p,candidate,target,bg,tolerance,3,a,v);values+=v;T cost=energy(model,p,candidate);++values;if((code==0||code==5)&&std::isfinite(cost)&&cost<best){copy(candidate,point);best=cost;accepted+=a;status=code;color_moved=true;}}
-        T gradient[L];if(!proposal<false>(model,p,point,target,static_cast<T(*)[3]>(nullptr),gradient))break;++values;T scale=1;each<1,L>([&](auto l) RF_LAMBDA_INLINE{T g=std::abs(gradient[l]);if(g>scale)scale=g;});if(!std::isfinite(scale))break;
+        {Point<T,L> candidate;copy(point,candidate);int code=improve(model,p,candidate,target,bg,tolerance,3,a,v);values+=v;T cost=energy(model,p,candidate);++values;if((code==0||code==5)&&configured::isfinite(cost)&&cost<best){copy(candidate,point);best=cost;accepted+=a;status=code;color_moved=true;}}
+        T gradient[L];if(!proposal<false>(model,p,point,target,static_cast<T(*)[3]>(nullptr),gradient))break;++values;T scale=1;each<1,L>([&](auto l) RF_LAMBDA_INLINE{T g=std::abs(gradient[l]);if(g>scale)scale=g;});if(!configured::isfinite(scale))break;
         bool moved=false;T amount=T(.5);for(int attempt=0;attempt<6;++attempt){Point<T,L> trial;copy(point,trial);each<0,L>([&](auto l) RF_LAMBDA_INLINE{trial.a[l]=configured::clip(point.a[l]-amount*gradient[l]/scale);});trial.a[0]=1;
-            int code=improve(model,p,trial,target,bg,tolerance,0,a,v);values+=v;T cost=energy(model,p,trial);++values;if((code==0||code==5)&&std::isfinite(cost)&&cost<best){copy(trial,point);best=cost;status=code;++accepted;moved=true;break;}amount*=T(.5);}
+            int code=improve(model,p,trial,target,bg,tolerance,0,a,v);values+=v;T cost=energy(model,p,trial);++values;if((code==0||code==5)&&configured::isfinite(cost)&&cost<best){copy(trial,point);best=cost;status=code;++accepted;moved=true;break;}amount*=T(.5);}
         if(!moved&&!color_moved)break;
     }return status;
 }

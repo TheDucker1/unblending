@@ -18,7 +18,7 @@ template<int Mode>__global__ __launch_bounds__(128,4) void initialize(const Mode
  int slot=blockIdx.x*blockDim.x+threadIdx.x;if(slot>=f.size)return;int i=f.begin+slot;Point start=register_three::initial(general::View<const float>{f.initial+i,size_t(f.n)});float norm;Point x=register_three::restore<Mode>(model,p,start,target(f,i),64,norm,tolerance);put(f,i,x);f.status[i]=3;f.accepted[i]=f.values[i]=0;f.coupled[i]=1;
  if(norm<=tolerance*tolerance){f.status[i]=0;push(f.ready,f.counts,i);}
 }
-__global__ void initial_energy(const Model* model,general::Problem p,Frame f){int job=blockIdx.x*blockDim.x+threadIdx.x;if(job>=*f.counts)return;int i=f.ready[job],slot=i-f.begin;float value=register_three::energy(model,p,point(f,i));f.energy[slot]=value;f.values[i]=1;if(!std::isfinite(value))f.status[i]=2;}
+__global__ void initial_energy(const Model* model,general::Problem p,Frame f){int job=blockIdx.x*blockDim.x+threadIdx.x;if(job>=*f.counts)return;int i=f.ready[job],slot=i-f.begin;float value=register_three::energy(model,p,point(f,i));f.energy[slot]=value;f.values[i]=1;if(!configured::isfinite(value))f.status[i]=2;}
 template<int Mode>__global__ __launch_bounds__(128,4) void direction(const Model* model,general::Problem p,Frame f){
  int job=blockIdx.x*blockDim.x+threadIdx.x;if(job>=*f.counts)return;int i=f.ready[job],slot=i-f.begin;if(f.status[i]!=0)return;Point x=point(f,i),d;V anchor;
  if(!register_three::proposal(model,p,x,target(f,i),d,anchor,Mode,Mode))return;float limit;if(!register_three::limit_step(x,d,limit))return;store7(f.delta,f.capacity,slot,d);f.anchor[slot]=anchor.r;f.anchor[size_t(f.capacity)+slot]=anchor.g;f.anchor[size_t(2)*f.capacity+slot]=anchor.b;f.limits[slot]=limit;push(f.trials,f.counts+1,i);
@@ -27,7 +27,7 @@ template<int Mode>__global__ __launch_bounds__(128,4) void trial(const Model* mo
  int job=blockIdx.x*blockDim.x+threadIdx.x,count=f.counts[1];if(job>=6*count)return;int back=job/count,i=f.trials[job-back*count],slot=i-f.begin;
  float factor=__uint_as_float(0x3f800000u-(unsigned(back)<<23));Point x=register_three::advance(point(f,i),load7(f.delta,f.capacity,slot),f.limits[slot]*factor);V anchor{f.anchor[slot],f.anchor[size_t(f.capacity)+slot],f.anchor[size_t(2)*f.capacity+slot]};
  float norm=register_three::trial_restore(x,target(f,i),anchor,Mode,Mode,tolerance);bool called=norm<=tolerance*tolerance;float value=called?register_three::energy(model,p,x):INFINITY;size_t offset=size_t(back)*f.capacity+slot;
- f.called[offset]=called;f.candidate_energy[offset]=std::isfinite(value)?value:INFINITY;if(std::isfinite(value))store7(f.candidate+size_t(back)*7*f.capacity,f.capacity,slot,x);
+ f.called[offset]=called;f.candidate_energy[offset]=configured::isfinite(value)?value:INFINITY;if(configured::isfinite(value))store7(f.candidate+size_t(back)*7*f.capacity,f.capacity,slot,x);
 }
 __global__ void commit(Frame f){int job=blockIdx.x*blockDim.x+threadIdx.x;if(job>=f.counts[1])return;int i=f.trials[job],slot=i-f.begin,calls=0;for(int back=0;back<6;++back)calls+=f.called[size_t(back)*f.capacity+slot];f.values[i]+=calls;
  for(int back=0;back<6;++back){float value=f.candidate_energy[size_t(back)*f.capacity+slot];if(value<f.energy[slot]){put(f,i,load7(f.candidate+size_t(back)*7*f.capacity,f.capacity,slot));f.energy[slot]=value;++f.accepted[i];push(f.ready,f.counts,i);return;}}

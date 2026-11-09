@@ -8,12 +8,12 @@ using Model=gaussian_box::Model;
 // Symmetric positive-definite3x3 solve, scaled to avoid determinant overflow.
 // The general active-face extension will use the appropriate principal block.
 template<class T>HD bool solve3(const T* K,T sigma,const T* rhs,T* result){
-    T scale=K[0]+K[3]+K[5]+T(3)*sigma;if(!(scale>0)||!std::isfinite(scale))return false;
+    T scale=K[0]+K[3]+K[5]+T(3)*sigma;if(!(scale>0)||!configured::isfinite(scale))return false;
     T a=(K[0]+sigma)/scale,b=K[1]/scale,c=K[2]/scale,d=(K[3]+sigma)/scale,e=K[4]/scale,f=(K[5]+sigma)/scale;
     T A=d*f-e*e,B=c*e-b*f,C=b*e-c*d,D=a*f-c*c,E=b*c-a*e,F=a*d-b*b,det=a*A+b*B+c*C;
-    if(!(det>0)||!std::isfinite(T(1)/det))return false;
+    if(!(det>0)||!configured::isfinite(T(1)/det))return false;
     T factor=T(1)/(det*scale);result[0]=factor*(A*rhs[0]+B*rhs[1]+C*rhs[2]);result[1]=factor*(B*rhs[0]+D*rhs[1]+E*rhs[2]);result[2]=factor*(C*rhs[0]+E*rhs[1]+F*rhs[2]);
-    return std::isfinite(result[0])&&std::isfinite(result[1])&&std::isfinite(result[2]);
+    return configured::isfinite(result[0])&&configured::isfinite(result[1])&&configured::isfinite(result[2]);
 }
 template<class T>HD T norm3(const T* v){return configured::root(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]);}
 
@@ -27,7 +27,7 @@ template<class T>HD int pixel(const Model* model,general::Problem p,int n,int in
     const T* background,T* output,T* scratch,T tolerance,T* seed=nullptr){
     int L=p.layers;auto a=[&](int l){return alpha[size_t(l)*n+index];};auto w=[&](int l)->T&{return scratch[size_t(l)*n+index];};
     if(seed)for(int r=0;r<3;++r)seed[size_t(r)*n+index]=0;
-    for(int l=0;l<L;++l){T value=a(l);if(value<0||value>1||!std::isfinite(value)||(p.opaque&&l==0&&value!=1))return 4;output[size_t(l)*n+index]=value;}
+    for(int l=0;l<L;++l){T value=a(l);if(value<0||value>1||!configured::isfinite(value)||(p.opaque&&l==0&&value!=1))return 4;output[size_t(l)*n+index]=value;}
     T suffix=1;
     if(model[0].opaque_source_over){for(int l=L-1;l>0;--l){w(l)=a(l)*suffix;suffix*=1-a(l);}w(0)=suffix;}
     else {w(0)=a(0);for(int l=1;l<L;++l){T s=a(l),d=w(l-1);const auto& m=model[l];w(l)=T(m.X)*s*d+T(m.Y)*s*(1-d)+T(m.Z)*d*(1-s);}
@@ -47,7 +47,7 @@ template<class T>HD int pixel(const Model* model,general::Problem p,int n,int in
     }
     T K[6]{},rhs[3];for(int r=0;r<3;++r)rhs[r]=-target[size_t(r)*n+index];
     for(int l=0;l<L;++l){T weight=w(l),value=a(l);bool fixed=p.smooth&&l==0;const auto& m=model[l];
-        if(!std::isfinite(weight))return 4;
+        if(!configured::isfinite(weight))return 4;
         for(int r=0;r<3;++r)rhs[r]+=weight*(fixed?background[size_t(r)*n+index]:T(m.mean[r]));
         if(fixed||weight==0)continue;if(!(value>0))return 2;T scale=weight*weight/(T(2)*value);
         const int rows[6]={0,0,0,1,1,2},cols[6]={0,1,2,1,2,2};for(int k=0;k<6;++k)K[k]+=scale*T(m.covariance[3*rows[k]+cols[k]]);
@@ -71,7 +71,7 @@ template<class T>HD int pixel(const Model* model,general::Problem p,int n,int in
             if(p.smooth&&l==0)color=background[size_t(r)*n+index];
             else if(value==0&&weight==0)color=configured::clip(T(m.mean[r]));
             else {color=T(m.mean[r]);if(weight!=0){T v=0;for(int s=0;s<3;++s)v+=T(m.covariance[3*r+s])*dual[s];color-=weight/(T(2)*value)*v;}}
-            if(color<0||color>1||!std::isfinite(color))status=1;output[size_t(L+3*l+r)*n+index]=color;}}
+            if(color<0||color>1||!configured::isfinite(color))status=1;output[size_t(L+3*l+r)*n+index]=color;}}
     return status;
 }
 

@@ -75,6 +75,11 @@ set(INSTALL_INCLUDE_DIR "include"         CACHE INTERNAL "" FORCE)
 set(INSTALL_LIB_DIR     "lib"             CACHE INTERNAL "" FORCE)
 set(INSTALL_MAN_DIR     "share/man"       CACHE INTERNAL "" FORCE)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/external/nlopt)
+if(MSVC AND UNBLENDING_ENABLE_CUDA)
+	# The pinned StoGO sources use std::unary_function without including <functional>.
+	target_compile_options(nlopt PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/FIfunctional>)
+	target_compile_definitions(nlopt PRIVATE $<$<COMPILE_LANGUAGE:CXX>:_HAS_AUTO_PTR_ETC=1>)
+endif()
 
 set(JSON11_BUILD_TESTS          OFF CACHE INTERNAL "" FORCE)
 set(JSON11_ENABLE_DR1467_CANARY ON  CACHE INTERNAL "" FORCE)

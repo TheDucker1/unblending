@@ -7,7 +7,7 @@ REG3_HD bool retract_channel(float& color,float middle,float bg,float a,float to
     if(!(std::abs(anchor)>1e-10f))return false;float desired,value;
     if(!algebraic_retract::Inverse<float>::destination(upper,u,top,target,middle,desired))return false;
     if(!algebraic_retract::Inverse<float>::source(lower,a,bg,desired,color,value))return false;
-    if(!(value>=0&&value<=1&&std::isfinite(value)))return false;color=value;return true;
+    if(!(value>=0&&value<=1&&configured::isfinite(value)))return false;color=value;return true;
 }
 REG3_HD float trial_restore(Point& candidate,V target,V anchor,int lower,int upper,float tolerance=.005f){
     Evaluation e=evaluate(candidate,target,lower,upper);float norm=e.value;

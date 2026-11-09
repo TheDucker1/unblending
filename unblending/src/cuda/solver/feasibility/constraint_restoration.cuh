@@ -23,21 +23,21 @@ template<class T,class Model>struct ConstraintRestore {
     using P=Program<T,ZeroPrior,Model>;
     HD static bool identical(T a,T b){return a==b&&(a!=T(0)||std::signbit(a)==std::signbit(b));}
     HD static RESTORE_OUTLINED T norm(const Model* m,Problem p,const T* target,View<const T> alpha,View<const T> x){
-        probe::hit(probe::Norm);int L=p.layers;T rgb[3],da=x[0],result=0;for(int k=0;k<4*L;++k)if(!std::isfinite(x[k])||x[k]<0||x[k]>1)return INFINITY;if(p.opaque&&x[0]!=1)return INFINITY;
+        probe::hit(probe::Norm);int L=p.layers;T rgb[3],da=x[0],result=0;for(int k=0;k<4*L;++k)if(!configured::isfinite(x[k])||x[k]<0||x[k]>1)return INFINITY;if(p.opaque&&x[0]!=1)return INFINITY;
         for(int r=0;r<3;++r)rgb[r]=x[L+r];for(int l=1;l<L;++l){T a=x[l],next=T(m[l].X)*a*da+T(m[l].Y)*a*(1-da)+T(m[l].Z)*da*(1-a);for(int r=0;r<3;++r)rgb[r]=range_union::native_color(m[l],a,da,next,x[L+3*l+r],rgb[r]);da=next;}
         for(int r=0;r<3;++r){T d=rgb[r]-target[r];result+=d*d;}if(p.refinement)for(int l=0;l<L;++l){T d=x[l]-alpha[l];result+=d*d;}else{T d=da-1;result+=d*d;}
         for(int l=0;l<L;++l)if(m[l].gray){T length=0;for(int r=0;r<3;++r)length+=x[L+3*l+r]*x[L+3*l+r];length=configured::root(length);for(int r=0;r<3;++r){T d=T(1.7320508075688772935)*x[L+3*l+r]-length;result+=d*d;}}
-        return std::isfinite(result)?result:T(INFINITY);
+        return configured::isfinite(result)?result:T(INFINITY);
     }
     HD static bool solve(int count,const T* gram,const T* rhs,T* result){
-        if(count==3&&sqp_math::spd3(gram,rhs,result))return true;T a[20]{},trace=0;for(int r=0;r<count;++r)trace+=gram[4*r+r];if(!(trace>0&&std::isfinite(trace)))return false;
+        if(count==3&&sqp_math::spd3(gram,rhs,result))return true;T a[20]{},trace=0;for(int r=0;r<count;++r)trace+=gram[4*r+r];if(!(trace>0&&configured::isfinite(trace)))return false;
         for(int r=0;r<count;++r){result[r]=0;for(int s=0;s<count;++s)a[5*r+s]=gram[4*r+s]+(r==s?trace*T(sizeof(T)==4?1e-6:1e-12):T(0));a[5*r+count]=rhs[r];}
         for(int k=0;k<count;++k){int pivot=k;for(int r=k+1;r<count;++r)if(std::abs(a[5*r+k])>std::abs(a[5*pivot+k]))pivot=r;if(!(std::abs(a[5*pivot+k])>0))return false;if(pivot!=k)for(int s=k;s<=count;++s){T v=a[5*k+s];a[5*k+s]=a[5*pivot+s];a[5*pivot+s]=v;}
             for(int r=k+1;r<count;++r){T scale=a[5*r+k]/a[5*k+k];for(int s=k;s<=count;++s)a[5*r+s]-=scale*a[5*k+s];}}
-        for(int r=count-1;r>=0;--r){T v=a[5*r+count];for(int s=r+1;s<count;++s)v-=a[5*r+s]*result[s];result[r]=v/a[5*r+r];if(!std::isfinite(result[r]))return false;}return true;
+        for(int r=count-1;r>=0;--r){T v=a[5*r+count];for(int s=r+1;s<count;++s)v-=a[5*r+s]*result[s];result[r]=v/a[5*r+r];if(!configured::isfinite(result[r]))return false;}return true;
     }
     HD static void project(const Model* m,Problem p,View<const T> alpha,const T* bg,View<T> x){
-        for(int k=0;k<4*p.layers;++k){T low=Optimizer<T,ZeroPrior,Model>::bound(p,alpha,bg,k,false),high=Optimizer<T,ZeroPrior,Model>::bound(p,alpha,bg,k,true);T v=std::isfinite(x[k])?x[k]:T(.5);x[k]=v<low?low:(v>high?high:v);}
+        for(int k=0;k<4*p.layers;++k){T low=Optimizer<T,ZeroPrior,Model>::bound(p,alpha,bg,k,false),high=Optimizer<T,ZeroPrior,Model>::bound(p,alpha,bg,k,true);T v=configured::isfinite(x[k])?x[k]:T(.5);x[k]=v<low?low:(v>high?high:v);}
         if(p.refinement)for(int l=0;l<p.layers;++l)x[l]=p.opaque&&l==0?T(1):alpha[l];Optimizer<T,ZeroPrior,Model>::project_gray(m,p,x);
     }
     HD static RESTORE_OUTLINED bool neutral(const Model* m,Problem p,const T* target,View<T> x,int variant){
@@ -81,7 +81,7 @@ template<class T,class Model>struct ConstraintRestore {
         T b,h,c=1-u,d=1-a;
         if(p.smooth){b=burn?T(1)-bg[0]:bg[0];T upper=a+d*b;if(!(upper>0))return false;h=(high-c*upper)/(u*upper);if(h<1)h=1;}
         else{T k=(high-d*low)/a;if(k<1)k=1;b=low/k;h=(k-c)/u;}
-        if(!(b>=T(2)*range_union::epsilon<T>()&&b<=1&&h>=1&&std::isfinite(h)))return false;
+        if(!(b>=T(2)*range_union::epsilon<T>()&&b<=1&&h>=1&&configured::isfinite(h)))return false;
         auto top=[&](T value){T v=h*value;return u*(v<1?v:T(1))+c*value;};T upper=a+d*b;
         if(top(b)>low+eps||top(upper)<high-eps)return false;
         T k=c+u*h,split=u+c/h,top_source=1-T(1)/h;

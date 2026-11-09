@@ -13,7 +13,7 @@ template<class T,class Model>HD bool run(const Model* m,general::Problem p,const
         T qhi=(high-u)/c,qlo=low>u?(low-u)/c:T(0);
         if(qhi-d*qlo>a){T denominator=qhi-a;if(!(denominator>0))return false;T upper=d*low/denominator;if(upper<maximum)maximum=upper;}
     }
-    if(!(minimum<=maximum&&std::isfinite(minimum)&&std::isfinite(maximum)))return false;
+    if(!(minimum<=maximum&&configured::isfinite(minimum)&&configured::isfinite(maximum)))return false;
     T warm_top=burn?1-initial[9]:initial[9];
     T warm_k=warm_top<1?c+u/(1-warm_top):maximum;
     T k=warm_k<minimum?minimum:(warm_k>maximum?maximum:warm_k);

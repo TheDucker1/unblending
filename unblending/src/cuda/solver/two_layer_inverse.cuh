@@ -43,9 +43,9 @@ template<class T>HD Intervals<T> preimage(T d,int mode,T lo,T hi){
 
 template<class T,class Input=T,class Output=T,bool FastInterval=false>HD int pixel(const gaussian_box::Model* model,general::Problem problem,int n,int index,const Input* rgb,const Input* alpha,const Input* background,Output* output,T tolerance,T* candidate_error=nullptr){
     T av=T(alpha[size_t(n)+index]),bg[3],target[3],goal[3];
-    if(alpha[index]!=1||alpha[size_t(n)+index]<0||alpha[size_t(n)+index]>1||!std::isfinite(alpha[size_t(n)+index]))return 4;
+    if(alpha[index]!=1||alpha[size_t(n)+index]<0||alpha[size_t(n)+index]>1||!configured::isfinite(alpha[size_t(n)+index]))return 4;
     output[index]=alpha[index];output[size_t(n)+index]=alpha[size_t(n)+index];
-    for(int r=0;r<3;++r){Input original=background[size_t(r)*n+index];bg[r]=T(original);target[r]=T(rgb[size_t(r)*n+index]);if(original<0||original>1||!std::isfinite(original)||!std::isfinite(target[r]))return 4;output[size_t(2+r)*n+index]=original;}
+    for(int r=0;r<3;++r){Input original=background[size_t(r)*n+index];bg[r]=T(original);target[r]=T(rgb[size_t(r)*n+index]);if(original<0||original>1||!configured::isfinite(original)||!configured::isfinite(target[r]))return 4;output[size_t(2+r)*n+index]=original;}
     const auto& m=model[1];T A=T(m.X)*av+T(m.Z)*(1-av),den=A>T(1e-12)?A:T(1),amplitude=av/den,offset=T(m.Z)*(1-av)/den;
     Intervals<T> intervals[3];bool projected=false;T budget=tolerance/T(1.7320508075688772935);
     for(int r=0;r<3;++r){
@@ -105,14 +105,14 @@ template<bool FastInterval=false,bool FastGuard=false>HD inline int mixed_initia
     bool inexpensive_guard=FastGuard&&tolerance>=4e-5&&descriptor.Z==1&&(descriptor.X==1||descriptor.X==2)&&descriptor.mode!=6&&descriptor.mode!=7;
     float margin=8e-6f,candidate_tolerance=float(tolerance)-(inexpensive_guard?2*margin:0),error32=INFINITY;
     int status=pixel<float,double,double,FastInterval>(model,problem,n,index,rgb,alpha,background,output,candidate_tolerance,&error32);repair=0;
-    if(inexpensive_guard){float allowance=float(tolerance)-margin;repair=!std::isfinite(error32)||error32>allowance*allowance||status==2||status==4||status==6||status==7;return status;}
+    if(inexpensive_guard){float allowance=float(tolerance)-margin;repair=!configured::isfinite(error32)||error32>allowance*allowance||status==2||status==4||status==6||status==7;return status;}
     if(status==2||status==4||status==6){repair=1;return status;}
     const auto& m=model[1];double a=alpha[size_t(n)+index],A=m.X*a+m.Z*(1-a),den=A>1e-12?A:1,amplitude=a/den,offset=m.Z*(1-a)/den,error=0;bool projected=false;
     for(int r=0;r<3;++r){double d=background[size_t(r)*n+index],f0=general::blend(0.,d,m.mode),f1=general::blend(1.,d,m.mode),low=f0<f1?f0:f1,high=f0>f1?f0:f1;if(m.mode==10)low=0;
         low=amplitude*low+offset*d;high=amplitude*high+offset*d;double target=rgb[size_t(r)*n+index],goal=target<low?low:(target>high?high:target);projected|=goal!=target;
         double color=output[size_t(5+r)*n+index],delta=amplitude*general::blend(color,d,m.mode)+offset*d-goal;error+=delta*delta;
     }
-    repair=!std::isfinite(error)||error>(tolerance+2e-6)*(tolerance+2e-6);
+    repair=!configured::isfinite(error)||error>(tolerance+2e-6)*(tolerance+2e-6);
     if(status==0||status==3||status==5)status=projected?5:0;
     return status;
 }

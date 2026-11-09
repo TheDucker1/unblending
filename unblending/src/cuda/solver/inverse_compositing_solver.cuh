@@ -49,11 +49,11 @@ template<class T>HD T local_metric(const Model& m,const T* color,T* gradient,T* 
     for(int j=0;j<m.term_count;++j){const double* term=m.terms+5*j;T d=-T(term[3]);for(int r=0;r<3;++r)d+=T(term[r])*color[r];T square=d*d,first=T(4)*T(term[4])*square*d,second=T(12)*T(term[4])*square;
         value+=T(term[4])*square*square;for(int r=0;r<3;++r)gradient[r]+=first*T(term[r]);for(int k=0;k<6;++k)h[k]+=second*T(term[row[k]])*T(term[col[k]]);}
     T gray=h[0]+h[3]+h[5]+T(2)*(h[1]+h[2]+h[4]);
-    T scale=h[0]>h[3]?h[0]:h[3];if(h[5]>scale)scale=h[5];bool valid=scale>0&&std::isfinite(scale);if(valid){for(int k=0;k<6;++k)h[k]/=scale;
+    T scale=h[0]>h[3]?h[0]:h[3];if(h[5]>scale)scale=h[5];bool valid=scale>0&&configured::isfinite(scale);if(valid){for(int k=0;k<6;++k)h[k]/=scale;
         T cofactor[6]={h[3]*h[5]-h[4]*h[4],h[2]*h[4]-h[1]*h[5],h[1]*h[4]-h[2]*h[3],h[0]*h[5]-h[2]*h[2],h[1]*h[2]-h[0]*h[4],h[0]*h[3]-h[1]*h[1]};T determinant=h[0]*cofactor[0]+h[1]*cofactor[1]+h[2]*cofactor[2];
-        valid=h[0]>0&&cofactor[5]>0&&determinant>0;T factor=valid?T(2)/(determinant*scale):T(0);for(int k=0;k<6;++k){covariance[k]=cofactor[k]*factor;valid=valid&&std::isfinite(covariance[k]);}}
+        valid=h[0]>0&&cofactor[5]>0&&determinant>0;T factor=valid?T(2)/(determinant*scale):T(0);for(int k=0;k<6;++k){covariance[k]=cofactor[k]*factor;valid=valid&&configured::isfinite(covariance[k]);}}
     if(!valid)for(int k=0;k<6;++k)covariance[k]=T(m.covariance[3*row[k]+col[k]]);
-    if(gray_inverse){T inverse=valid&&gray>0?T(1)/gray:T(m.gray_inverse);*gray_inverse=inverse>0&&std::isfinite(inverse)?inverse:T(1);}
+    if(gray_inverse){T inverse=valid&&gray>0?T(1)/gray:T(m.gray_inverse);*gray_inverse=inverse>0&&configured::isfinite(inverse)?inverse:T(1);}
     return value;
 }
 
@@ -102,22 +102,22 @@ template<class T,bool Cube=false>HD bool proposal(const Model* model,general::Pr
         T normalized[3];for(int r=0;r<3;++r){T move=0;for(int s=0;s<3;++s)move+=T(.5)*covariance[indices[3*r+s]]*gradient[s];next[L+3*l+r]=point[L+3*l+r]-move;rhs[r]-=j[r]*move;normalized[r]=j[r]/(T(2)*a);jac[L+3*l+r]=normalized[r];}
         for(int k=0;k<6;++k)K[k]+=j[rows[k]]*covariance[k]*normalized[cols[k]];
     }
-    T trace=K[0]+K[3]+K[5];if(degenerate||!std::isfinite(trace)||trace<0)return false;
+    T trace=K[0]+K[3]+K[5];if(degenerate||!configured::isfinite(trace)||trace<0)return false;
     if(trace>0){if(!normal_refinement::solve3(K,trace*T(sizeof(T)==4?1e-6:1e-12),rhs,dual))return false;}else for(int r=0;r<3;++r)dual[r]=0;
     if(multiplier)for(int r=0;r<3;++r)multiplier[r]=dual[r];
-    const int indices[9]={0,1,2,1,3,4,2,4,5};for(int l=0;l<L;++l){if((p.smooth&&l==0)||point[l]==0)continue;for(int r=0;r<3;++r){T predicted=next[L+3*l+r];for(int s=0;s<3;++s)predicted-=metric[6*l+indices[3*r+s]]*jac[L+3*l+s]*dual[s];if(!std::isfinite(predicted))return false;next[L+3*l+r]=predicted;}}
+    const int indices[9]={0,1,2,1,3,4,2,4,5};for(int l=0;l<L;++l){if((p.smooth&&l==0)||point[l]==0)continue;for(int r=0;r<3;++r){T predicted=next[L+3*l+r];for(int s=0;s<3;++s)predicted-=metric[6*l+indices[3*r+s]]*jac[L+3*l+s]*dual[s];if(!configured::isfinite(predicted))return false;next[L+3*l+r]=predicted;}}
     return true;
 }
 
 template<class T,bool Cube=false>HD int improve(const Model* model,general::Problem p,View<const T> initial,View<const T> target,View<const T> alpha,View<const T> bg,View<T> point,View<T> work,T tolerance,int rounds,int& accepted,int& values){
     int L=p.layers;accepted=values=0;T limit=sizeof(T)==4?T(32):T(INFINITY);int status;if constexpr(Cube)status=reachable_cube::pixel(model,p,initial,target,alpha,bg,point,work,tolerance,T(0),false,limit);else status=range_union::pixel(model,p,initial,target,alpha,bg,point,work,tolerance,T(0),false,limit);if(status!=0&&status!=5)return status;
-    using P=general::Program<T,Prior,Model>;T best=P::energy(model,p,View<const T>{point.data,point.stride});++values;if(!std::isfinite(best))return 2;
+    using P=general::Program<T,Prior,Model>;T best=P::energy(model,p,View<const T>{point.data,point.stride});++values;if(!configured::isfinite(best))return 2;
     if(rounds==0)return status;T goal[3];for(int r=0;r<3;++r){if constexpr(Cube)goal[r]=configured::clip(target[r]);else{range_union::Prefix<T> last{work,L,L-1,r};if(!last.nearest(target[r],goal[r]))return 9;}}
     View<T> preferred{work.data+size_t(18*L)*work.stride,work.stride},trial{work.data+size_t(22*L)*work.stride,work.stride};
     for(int iteration=0;iteration<rounds;++iteration){if(!proposal<T,Cube>(model,p,View<const T>{goal,1},point,work))break;bool moved=false;
         for(int attempt=0;attempt<5;++attempt){for(int k=0;k<4*L;++k)preferred[k]=point[k]+T(.5)*(preferred[k]-point[k]);
             int code;if constexpr(Cube)code=reachable_cube::pixel(model,p,View<const T>{preferred.data,preferred.stride},target,alpha,bg,trial,work,tolerance,T(0),true,limit);else code=range_union::pixel(model,p,View<const T>{preferred.data,preferred.stride},target,alpha,bg,trial,work,tolerance,T(0),true,limit);T energy=P::energy(model,p,View<const T>{trial.data,trial.stride});++values;
-            if((code==0||code==5)&&std::isfinite(energy)&&energy<best){for(int k=0;k<4*L;++k)point[k]=trial[k];best=energy;status=code;++accepted;moved=true;break;}}
+            if((code==0||code==5)&&configured::isfinite(energy)&&energy<best){for(int k=0;k<4*L;++k)point[k]=trial[k];best=energy;status=code;++accepted;moved=true;break;}}
         if(!moved)break;
     }
     return status;
@@ -140,17 +140,17 @@ template<class T,bool Cube=false>HD int first(const Model* model,general::Proble
     for(int outer=0;outer<rounds;++outer){
         bool color_moved=false;
         int code=improve<T,Cube>(model,p,cv(point),target,alpha,bg,candidate,work,tolerance,3,a,v);values+=v;T cost=P::energy(model,p,cv(candidate));++values;
-        if((code==0||code==5)&&std::isfinite(cost)&&cost<best){for(int k=0;k<4*L;++k)point[k]=candidate[k];best=cost;accepted+=a;status=code;color_moved=true;}
+        if((code==0||code==5)&&configured::isfinite(cost)&&cost<best){for(int k=0;k<4*L;++k)point[k]=candidate[k];best=cost;accepted+=a;status=code;color_moved=true;}
         T dual[3];if(!proposal<T,Cube>(model,p,target,point,work,dual))break;
         View<T> prefix{work.data+size_t(10*L)*work.stride,work.stride},gradient{work.data+size_t(14*L)*work.stride,work.stride};
         alpha_adjoint(model,p,cv(point),cv(prefix),dual,gradient,so&&p.opaque);++values;
-        T scale=1;for(int l=0;l<L;++l)if(!(p.opaque&&l==0)){T g=std::abs(gradient[l]);if(g>scale)scale=g;}if(!std::isfinite(scale))break;
+        T scale=1;for(int l=0;l<L;++l)if(!(p.opaque&&l==0)){T g=std::abs(gradient[l]);if(g>scale)scale=g;}if(!configured::isfinite(scale))break;
         bool moved=false;T amount=T(.5);
         for(int attempt=0;attempt<6;++attempt){for(int k=0;k<4*L;++k)preferred[k]=point[k];sum=0;
             for(int l=0;l<L;++l){T next=plus?point[l]*std::exp(-amount*gradient[l]/scale):configured::clip(point[l]-amount*gradient[l]/scale);preferred[l]=next;sum+=next;}
             if(plus){for(int l=0;l<L;++l)preferred[l]/=sum;if(p.opaque){preferred[0]=1;for(int l=1;l<L;++l)preferred[l]=0;}}else preferred[0]=1;
             code=improve<T,Cube>(model,p,cv(preferred),target,cv(preferred),bg,trial,work,tolerance,0,a,v);values+=v;cost=P::energy(model,p,cv(trial));++values;
-            if((code==0||code==5)&&std::isfinite(cost)&&cost<best){for(int k=0;k<4*L;++k)point[k]=trial[k];best=cost;status=code;++accepted;moved=true;break;}amount*=T(.5);
+            if((code==0||code==5)&&configured::isfinite(cost)&&cost<best){for(int k=0;k<4*L;++k)point[k]=trial[k];best=cost;status=code;++accepted;moved=true;break;}amount*=T(.5);
         }
         if(!moved&&!color_moved)break;
     }
