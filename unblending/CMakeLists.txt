@@ -20,10 +20,9 @@ target_include_directories(
 )
 
 if(UNBLENDING_ENABLE_CUDA)
-	set(cuda_solver "${PROJECT_SOURCE_DIR}/experiments/first-pass-gpu")
 	# Ship the fixed FP32 blend header used by the solver.
-	target_sources(unblending PRIVATE src/gpu_backend.cu src/cuda/float_blend.hpp)
-	target_include_directories(unblending PRIVATE "${cuda_solver}/general" "${CMAKE_CURRENT_SOURCE_DIR}/src/cuda")
+	target_sources(unblending PRIVATE src/cuda/pixel_pipeline.cu src/cuda/compositing/blend_fp32.hpp)
+	target_include_directories(unblending PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src/cuda")
 	target_compile_definitions(unblending PRIVATE UNBLENDING_HAS_CUDA)
 	set_target_properties(unblending PROPERTIES CUDA_STANDARD 17 CUDA_STANDARD_REQUIRED ON)
 	target_compile_options(unblending PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:--fmad=false>)

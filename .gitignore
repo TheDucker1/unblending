@@ -1,4 +1,4 @@
-# Local tests and research artifacts. Committed CUDA sources remain tracked.
+# Local tests and research artifacts.
 /unblending/tests/
 /experiments/
 
