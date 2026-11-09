@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stdexcept>
 #include <vector>
 
 namespace unblending {
@@ -9,6 +10,12 @@ struct RgbImageView;
 struct RgbaLayersView;
 
 namespace gpu {
+enum class Backend { environment, automatic, cpu, cuda };
+
+struct ExecutionError : std::runtime_error {
+    using std::runtime_error::runtime_error;
+};
+
 struct Layer {
     double mean[3], precision[9];
     int x, y, z, mode;
@@ -28,7 +35,7 @@ bool try_solve(const ColorImage& image, const std::vector<LayerInfo>& layers,
                std::vector<ColorImage>& output);
 
 bool try_solve_pixels(RgbImageView image, const std::vector<LayerInfo>& layers,
-                      const RgbaLayersView* first, Options options,
+                      const RgbaLayersView* first, Options options, Backend backend,
                       std::vector<double>& output);
 
 #ifdef UNBLENDING_HAS_CUDA

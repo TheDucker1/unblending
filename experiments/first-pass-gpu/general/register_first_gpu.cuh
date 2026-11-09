@@ -1,5 +1,10 @@
 #pragma once
 #include "register_first.cuh"
+#ifdef _MSC_VER
+#define RF_GPU_LAMBDA_INLINE
+#else
+#define RF_GPU_LAMBDA_INLINE __attribute__((always_inline))
+#endif
 namespace register_first_gpu {
 inline bool size_supported(int layers){return layers==2||layers==3||layers==5||layers==7;}
 
@@ -20,13 +25,13 @@ template<int L,bool Refine>__global__ __launch_bounds__(128,4) void solve_kernel
     if(*classification!=1)return;
     __shared__ register_first::Model<float> shared[L];if(threadIdx.x<L)shared[threadIdx.x]=model[threadIdx.x];__syncthreads();int i=blockIdx.x*blockDim.x+threadIdx.x;if(i>=n)return;
     register_first::Point<float,L> point;float wanted[3],background[3];
-    register_first::each<0,L>([&](auto l) __attribute__((always_inline)){point.a[l]=(Refine?alpha:initial)[size_t(l)*n+i];register_first::each<0,3>([&](auto r) __attribute__((always_inline)){point.c[l][r]=initial[size_t(L+3*l+r)*n+i];});});
-    register_first::each<0,3>([&](auto r) __attribute__((always_inline)){wanted[r]=target[size_t(r)*n+i];background[r]=bg[size_t(r)*n+i];});
+    register_first::each<0,L>([&](auto l) RF_GPU_LAMBDA_INLINE{point.a[l]=(Refine?alpha:initial)[size_t(l)*n+i];register_first::each<0,3>([&](auto r) RF_GPU_LAMBDA_INLINE{point.c[l][r]=initial[size_t(L+3*l+r)*n+i];});});
+    register_first::each<0,3>([&](auto r) RF_GPU_LAMBDA_INLINE{wanted[r]=target[size_t(r)*n+i];background[r]=bg[size_t(r)*n+i];});
     int steps,evaluations,code;
     if constexpr(Refine)code=register_first::improve(shared,p,point,wanted,background,tolerance,rounds,steps,evaluations);
     else code=register_first::first(shared,p,point,wanted,background,tolerance,rounds,steps,evaluations);
     status[i]=code;accepted[i]=steps;values[i]=evaluations;
-    register_first::each<0,L>([&](auto l) __attribute__((always_inline)){output[size_t(l)*n+i]=point.a[l];register_first::each<0,3>([&](auto r) __attribute__((always_inline)){output[size_t(L+3*l+r)*n+i]=point.c[l][r];});});if(paths)paths[i]=0;
+    register_first::each<0,L>([&](auto l) RF_GPU_LAMBDA_INLINE{output[size_t(l)*n+i]=point.a[l];register_first::each<0,3>([&](auto r) RF_GPU_LAMBDA_INLINE{output[size_t(L+3*l+r)*n+i]=point.c[l][r];});});if(paths)paths[i]=0;
 }
 template<bool Refine>inline void launch(const register_first::Model<float>* model,const int* classification,general::Problem p,int n,
     const float* initial,const float* target,const float* alpha,const float* bg,float* output,int* status,int* accepted,int* values,float tolerance,int rounds,int* paths,cudaStream_t stream){
@@ -48,3 +53,4 @@ template<bool Refine>inline void resources(int layers,cudaFuncAttributes& attrib
     }
 }
 }
+#undef RF_GPU_LAMBDA_INLINE

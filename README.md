@@ -41,6 +41,23 @@ loading, saving, and resizing. Library clients who use the legacy file-based
 image helpers can enable it explicitly with `-DUNBLENDING_BUILD_IMAGE_IO=ON`
 and link that target.
 
+## Shared library and C header
+
+Enable `UNBLENDING_BUILD_SDK` to build the shared library and the versioned
+C interface in `unblending.h`. The interface accepts caller-owned RGB and
+RGBA buffers and per-layer configuration. Each call selects automatic,
+CPU, or CUDA execution through its options.
+
+```sh
+cmake -S . -B build-sdk -DUNBLENDING_BUILD_SDK=ON -DUNBLENDING_BUILD_CLI_APP=OFF
+cmake --build build-sdk --config Release --target unblending_sdk
+cmake --install build-sdk --config Release --component unblending_sdk --prefix sdk
+```
+
+Add `-DUNBLENDING_ENABLE_CUDA=ON` and set `CMAKE_CUDA_ARCHITECTURES` to
+build the GPU backend. The SDK component installs the public C header,
+shared library, and project license files.
+
 ## CUDA through the public API
 
 Build with `UNBLENDING_ENABLE_CUDA=ON` to use CUDA through the existing

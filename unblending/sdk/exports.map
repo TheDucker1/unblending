@@ -1,0 +1,8 @@
+{
+    global:
+        unblending_abi_version;
+        unblending_unmix;
+        unblending_refine;
+    local:
+        *;
+};

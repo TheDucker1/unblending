@@ -1,5 +1,5 @@
 #include <unblending/unblending.hpp>
-#include "gpu_dispatch.hpp"
+#include "pixel_solver.hpp"
 #include <unblending/image_processing.hpp>
 #include <unblending/color_model.hpp>
 #include <unblending/equations.hpp>
@@ -573,26 +573,25 @@ namespace unblending
         }
     }
 
-    vector<double> compute_color_unmixing(RgbImageView image,
+    vector<double> detail::unmix_pixels(RgbImageView image,
                                          const vector<LayerInfo>& layer_infos,
                                          bool has_opaque_background,
-                                         int target_concurrency)
+                                         int target_concurrency, gpu::Backend backend)
     {
         const auto size = validate_pixels(image, layer_infos);
-        timer::Timer timer("compute_color_unmixing");
         vector<double> output;
         if (gpu::try_solve_pixels(image, layer_infos, nullptr,
-                                  gpu_options(has_opaque_background), output))
+                                  gpu_options(has_opaque_background), backend, output))
             return output;
         return pack_layers(unmix_cpu(read_rgb(image), layer_infos,
                                      has_opaque_background, target_concurrency), size);
     }
 
-    vector<double> perform_matte_refinement(RgbImageView image, RgbaLayersView layers,
+    vector<double> detail::refine_pixels(RgbImageView image, RgbaLayersView layers,
                                            const vector<LayerInfo>& layer_infos,
                                            bool has_opaque_background,
                                            bool force_smooth_background,
-                                           int target_concurrency)
+                                           int target_concurrency, gpu::Backend backend)
     {
         const auto size = validate_pixels(image, layer_infos);
         if (!layers.data || layers.size != size)
@@ -604,15 +603,36 @@ namespace unblending
             !std::all_of(comp_ops.begin(), comp_ops.end(), [](const CompOp& op) { return op.is_source_over(); }))
             throw std::invalid_argument("Refinement requires an all-Plus or all-SourceOver stack");
 
-        timer::Timer timer("perform_matte_refinement");
         vector<double> output;
         if (gpu::try_solve_pixels(image, layer_infos, &layers,
-                                  gpu_options(has_opaque_background, force_smooth_background), output))
+                                  gpu_options(has_opaque_background, force_smooth_background), backend, output))
             return output;
         return pack_layers(refine_cpu(read_rgb(image),
                                       read_layers(layers, image.width, image.height, layer_infos.size()),
                                       layer_infos, has_opaque_background, force_smooth_background,
                                       target_concurrency), size);
+    }
+
+    vector<double> compute_color_unmixing(RgbImageView image,
+                                         const vector<LayerInfo>& layer_infos,
+                                         bool has_opaque_background,
+                                         int target_concurrency)
+    {
+        timer::Timer timer("compute_color_unmixing");
+        return detail::unmix_pixels(image, layer_infos, has_opaque_background,
+                                    target_concurrency, gpu::Backend::environment);
+    }
+
+    vector<double> perform_matte_refinement(RgbImageView image, RgbaLayersView layers,
+                                           const vector<LayerInfo>& layer_infos,
+                                           bool has_opaque_background,
+                                           bool force_smooth_background,
+                                           int target_concurrency)
+    {
+        timer::Timer timer("perform_matte_refinement");
+        return detail::refine_pixels(image, layers, layer_infos, has_opaque_background,
+                                     force_smooth_background, target_concurrency,
+                                     gpu::Backend::environment);
     }
 
     ColorImage composite_layers(const vector<ColorImage>& layers,

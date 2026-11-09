@@ -51,17 +51,26 @@ std::vector<Layer> describe(const std::vector<LayerInfo>& layers)
 namespace {
 template<class ReadRgb, class ReadRgba>
 bool try_solve_planes(int w, int h, const std::vector<LayerInfo>& layers, bool refinement,
-                      bool valid_layers, Options options, ReadRgb read_rgb, ReadRgba read_rgba,
+                      bool valid_layers, Options options, Backend backend, ReadRgb read_rgb, ReadRgba read_rgba,
                       std::vector<double>& output)
 {
-    const char* backend = std::getenv("UNBLENDING_BACKEND");
-    const bool required = backend && std::strcmp(backend, "cuda") == 0;
-    if (backend && std::strcmp(backend, "cpu") == 0) return false;
-    if (backend && *backend && !required && std::strcmp(backend, "auto") != 0)
-        throw std::invalid_argument("UNBLENDING_BACKEND must be auto, cpu, or cuda");
+    if (backend == Backend::environment)
+    {
+        const char* value = std::getenv("UNBLENDING_BACKEND");
+        if (!value || !*value || std::strcmp(value, "auto") == 0)
+            backend = Backend::automatic;
+        else if (std::strcmp(value, "cpu") == 0)
+            backend = Backend::cpu;
+        else if (std::strcmp(value, "cuda") == 0)
+            backend = Backend::cuda;
+        else
+            throw std::invalid_argument("UNBLENDING_BACKEND must be auto, cpu, or cuda");
+    }
+    if (backend == Backend::cpu) return false;
+    const bool required = backend == Backend::cuda;
 
 #ifndef UNBLENDING_HAS_CUDA
-    if (required) throw std::runtime_error("Rebuild with UNBLENDING_ENABLE_CUDA=ON");
+    if (required) throw ExecutionError("Rebuild with UNBLENDING_ENABLE_CUDA=ON");
     return false;
 #else
     try
@@ -103,11 +112,11 @@ bool try_solve_planes(int w, int h, const std::vector<LayerInfo>& layers, bool r
     }
     catch (const std::logic_error& error)
     {
-        if (required) throw std::runtime_error(std::string("CUDA unblending: ") + error.what());
+        if (required) throw ExecutionError(std::string("CUDA unblending: ") + error.what());
     }
     catch (const std::runtime_error& error)
     {
-        if (required) throw std::runtime_error(std::string("CUDA unblending: ") + error.what());
+        if (required) throw ExecutionError(std::string("CUDA unblending: ") + error.what());
     }
     return false;
 #endif
@@ -128,7 +137,7 @@ bool try_solve(const ColorImage& image, const std::vector<LayerInfo>& layers,
     const auto read_rgba = [&](std::size_t l, int x, int y) { return (*first)[l].get_rgba(x, y); };
     std::vector<double> solved;
     if (!try_solve_planes(w, h, layers, first != nullptr, valid_layers, options,
-                          read_rgb, read_rgba, solved))
+                          Backend::environment, read_rgb, read_rgba, solved))
         return false;
 
     const std::size_t n = std::size_t(w) * h, layer_count = layers.size();
@@ -151,7 +160,7 @@ bool try_solve(const ColorImage& image, const std::vector<LayerInfo>& layers,
 }
 
 bool try_solve_pixels(RgbImageView image, const std::vector<LayerInfo>& layers,
-                      const RgbaLayersView* first, Options options,
+                      const RgbaLayersView* first, Options options, Backend backend,
                       std::vector<double>& output)
 {
     const std::size_t n = std::size_t(image.width) * image.height;
@@ -165,7 +174,7 @@ bool try_solve_pixels(RgbImageView image, const std::vector<LayerInfo>& layers,
     };
     std::vector<double> solved;
     if (!try_solve_planes(image.width, image.height, layers, first != nullptr, true,
-                          options, read_rgb, read_rgba, solved))
+                          options, backend, read_rgb, read_rgba, solved))
         return false;
 
     const std::size_t layer_count = layers.size();
